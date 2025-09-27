@@ -1,2 +1,2 @@
 # capnwebcpp
-Cap'n Web C++
+Cap'n Web C++ Server Library
