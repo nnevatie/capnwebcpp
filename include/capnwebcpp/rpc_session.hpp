@@ -1,9 +1,10 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <functional>
 #include <unordered_map>
-#include <memory>
+
 #include <nlohmann/json.hpp>
 #include <App.h>
 
@@ -24,8 +25,8 @@ public:
     // This method is called by the RPC session to dispatch method calls
     virtual json dispatch(const std::string& method, const json& args)
     {
-        auto it = methods_.find(method);
-        if (it != methods_.end())
+        auto it = methods.find(method);
+        if (it != methods.end())
             return it->second(args);
 
         throw std::runtime_error("Method not found: " + method);
@@ -35,11 +36,11 @@ protected:
     // Helper to register methods
     void method(const std::string& name, std::function<json(const json&)> handler)
     {
-        methods_[name] = handler;
+        methods[name] = handler;
     }
 
 private:
-    std::unordered_map<std::string, std::function<json(const json&)>> methods_;
+    std::unordered_map<std::string, std::function<json(const json&)>> methods;
 };
 
 // Internal data associated with each WebSocket connection
@@ -54,7 +55,7 @@ struct RpcSessionData
 class RpcSession
 {
 public:
-    RpcSession(std::shared_ptr<RpcTarget> target) : target_(target) {}
+    RpcSession(std::shared_ptr<RpcTarget> target) : target(target) {}
 
     // Handle incoming WebSocket message
     std::string handleMessage(RpcSessionData* sessionData, const std::string& message);
@@ -66,7 +67,7 @@ public:
     void onClose(RpcSessionData* sessionData);
 
 private:
-    std::shared_ptr<RpcTarget> target_;
+    std::shared_ptr<RpcTarget> target;
 
     void handlePush(RpcSessionData* sessionData, const json& pushData);
     json handlePull(RpcSessionData* sessionData, int exportId);
@@ -80,16 +81,8 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
 {
     auto session = std::make_shared<RpcSession>(target);
 
-    app.template ws<RpcSessionData>(path, {
-        .compression = uWS::DISABLED,
-        .maxPayloadLength = 16 * 1024 * 1024,
-        .idleTimeout = 120,
-        .maxBackpressure = 1 * 1024 * 1024,
-        .closeOnBackpressureLimit = false,
-        .resetIdleTimeoutOnSend = false,
-        .sendPingsAutomatically = true,
-
-        .upgrade = nullptr,
+    app.template ws<RpcSessionData>(path,
+    {
         .open = [session, target](auto* ws)
         {
             auto* userData = ws->getUserData();
