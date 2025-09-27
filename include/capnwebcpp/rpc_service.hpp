@@ -99,7 +99,9 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
             auto* userData = ws->getUserData();
             try
             {
+                #if 0
                 std::cout << __FUNCTION__ << ": received message: " << message << std::endl;
+                #endif
                 std::string response = session->handleMessage(userData, std::string(message));
                 if (!response.empty())
                     ws->send(response, uWS::TEXT);
@@ -137,7 +139,9 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
             {
                 try
                 {
+                    #if 0
                     std::cout << "HTTP POST received: " << body << std::endl;
+                    #endif
 
                     // Create a session data for this HTTP batch request
                     RpcSessionData sessionData;

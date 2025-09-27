@@ -34,7 +34,9 @@ void setupFileEndpoint(App& app, const std::string& path, const std::filesystem:
         std::filesystem::path canonicalBase = std::filesystem::weakly_canonical(root);
         std::filesystem::path canonicalPath = std::filesystem::weakly_canonical(fullPath);
 
+        #if 0
         std::cout << "Serving file: " << canonicalPath << std::endl;
+        #endif
 
         if (canonicalPath.string().find(canonicalBase.string()) != 0)
         {

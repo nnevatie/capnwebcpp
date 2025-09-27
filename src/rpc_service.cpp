@@ -22,7 +22,9 @@ std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::st
     try
     {
         auto msg = json::parse(message);
+        #if 0
         std::cout << "Received message: " << msg.dump() << std::endl;
+        #endif
 
         if (!msg.is_array() || msg.empty())
         {
@@ -209,12 +211,22 @@ json RpcSession::handlePull(RpcSessionData* sessionData, int exportId)
         else
         {
             // Send as resolve
-            response = json::array({"resolve", exportId, result});
+            // Arrays need to be wrapped in another array to escape them per Cap'n Web protocol
+            if (result.is_array())
+            {
+                response = json::array({"resolve", exportId, json::array({result})});
+            }
+            else
+            {
+                response = json::array({"resolve", exportId, result});
+            }
         }
 
         // Clean up
         sessionData->pendingResults.erase(exportId);
+        #if 0
         std::cout << __FUNCTION__ << ": sending response: " << response.dump() << std::endl;
+        #endif
         return response;
     }
     // Check if we have a pending operation to execute
@@ -239,8 +251,19 @@ json RpcSession::handlePull(RpcSessionData* sessionData, int exportId)
             sessionData->pendingOperations.erase(exportId);
 
             // Send as resolve
-            json response = json::array({"resolve", exportId, result});
+            // Arrays need to be wrapped in another array to escape them per Cap'n Web protocol
+            json response;
+            if (result.is_array())
+            {
+                response = json::array({"resolve", exportId, json::array({result})});
+            }
+            else
+            {
+                response = json::array({"resolve", exportId, result});
+            }
+            #if 0
             std::cout << __FUNCTION__ << ": sending response: " << response.dump() << std::endl;
+            #endif
             return response;
         }
         catch (const std::exception& e)
@@ -251,7 +274,9 @@ json RpcSession::handlePull(RpcSessionData* sessionData, int exportId)
             // Send as reject
             json error = json::array({"error", "MethodError", std::string(e.what())});
             json response = json::array({"reject", exportId, error});
+            #if 0
             std::cout << __FUNCTION__ << ": sending response: " << response.dump() << std::endl;
+            #endif
             return response;
         }
     }
