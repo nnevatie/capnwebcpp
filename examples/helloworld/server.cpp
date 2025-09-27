@@ -1,3 +1,5 @@
+#include <thread>
+
 #include <capnwebcpp/capnwebcpp.hpp>
 
 using namespace capnwebcpp;
@@ -16,7 +18,15 @@ public:
 
 int main(int argc, char** argv)
 {
-    const int port = argc > 1 ? std::atoi(argv[1]) : 8000;
-    runRpcServer<HelloServer>(port, "/api");
+    if (argc > 1)
+    {
+        const auto port = 8000;
+        const auto path = argv[1];
+        std::thread thread([port]()
+        {
+            runRpcServer<HelloServer>(port, "/api");
+        });
+        runFileServer(port, path, "/static/");
+    }
     return 0;
 }
