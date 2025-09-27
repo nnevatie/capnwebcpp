@@ -25,7 +25,8 @@ endif()
 # Configuration options
 set(UWS_GIT_TAG v20.74.0 CACHE STRING "uWebSockets version tag")
 set(USOCKETS_GIT_TAG v0.8.8 CACHE STRING "uSockets version tag")
-set(UWS_WITH_SSL ON CACHE BOOL "Enable SSL/TLS support")
+set(UWS_WITH_SSL OFF CACHE BOOL "Enable SSL/TLS support")
+set(UWS_WITH_ZLIB ON CACHE BOOL "Enable zlib compression support")
 set(LIBUV_GIT_TAG v1.48.0 CACHE STRING "libuv version tag (for Windows)")
 
 include(FetchContent)
@@ -63,12 +64,11 @@ if(NOT TARGET uSockets)
     # Exclude unnecessary components
     list(FILTER USOCKETS_C_SOURCES EXCLUDE REGEX ".*/src/eventing/.*\\.c$")
     list(FILTER USOCKETS_C_SOURCES EXCLUDE REGEX ".*/src/quic/.*\\.c$")
-    list(FILTER USOCKETS_C_SOURCES EXCLUDE REGEX ".*/src/crypto/.*\\.c$")
+    # Don't exclude crypto - we need openssl.c for SSL stub functions
 
     # Platform-specific adjustments
     if(WIN32)
-      list(FILTER USOCKETS_C_SOURCES EXCLUDE REGEX ".*/src/bsd\\.c$")
-      # On Windows, we always use libuv
+      # On Windows, we need bsd.c but use libuv for eventing
       file(GLOB _UWS_LIBUV_C "${_USOCKETS_SRC}/src/eventing/libuv*.c")
       list(APPEND USOCKETS_C_SOURCES ${_UWS_LIBUV_C})
     else()
@@ -136,9 +136,22 @@ if(NOT TARGET uSockets)
       find_package(OpenSSL QUIET)
       if(OpenSSL_FOUND)
         target_link_libraries(uSockets PUBLIC OpenSSL::SSL OpenSSL::Crypto)
-        target_compile_definitions(uSockets PUBLIC WITH_OPENSSL=1)
+        target_compile_definitions(uSockets PUBLIC LIBUS_USE_OPENSSL=1)
       else()
+        target_compile_definitions(uSockets PUBLIC LIBUS_NO_SSL=1)
         message(STATUS "OpenSSL not found - building without TLS support")
+      endif()
+    else()
+      target_compile_definitions(uSockets PUBLIC LIBUS_NO_SSL=1)
+      message(STATUS "SSL/TLS support disabled")
+    endif()
+
+    # Add zlib support if enabled
+    if(UWS_WITH_ZLIB)
+      find_package(ZLIB QUIET)
+      if(NOT ZLIB_FOUND AND WIN32)
+        # zlib will be built later, create a placeholder
+        # It will be properly linked via uwebsockets::uwebsockets interface
       endif()
     endif()
   endif()
@@ -181,8 +194,70 @@ endif()
 set_property(TARGET uwebsockets::uwebsockets PROPERTY
   INTERFACE_INCLUDE_DIRECTORIES "${_UWS_INCLUDE_DIR}"
 )
+
+# Handle zlib dependency
+if(UWS_WITH_ZLIB)
+  find_package(ZLIB QUIET)
+  if(NOT ZLIB_FOUND AND WIN32)
+    # Fetch and build zlib from source for Windows
+    message(STATUS "Building zlib from source for Windows")
+    FetchContent_Declare(
+      zlib
+      GIT_REPOSITORY https://github.com/madler/zlib.git
+      GIT_TAG        v1.3.1
+      GIT_SHALLOW    TRUE
+      GIT_PROGRESS   TRUE
+    )
+
+    set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "")
+    FetchContent_MakeAvailable(zlib)
+
+    # Find the zlib target
+    if(TARGET zlibstatic)
+      set(ZLIB_LIBRARY zlibstatic)
+      set(ZLIB_INCLUDE_DIR "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}")
+    elseif(TARGET zlib)
+      set(ZLIB_LIBRARY zlib)
+      set(ZLIB_INCLUDE_DIR "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}")
+    endif()
+    set(ZLIB_FOUND TRUE)
+  endif()
+
+  if(ZLIB_FOUND)
+    # Link zlib to both uSockets and the interface target
+    if(TARGET uSockets)
+      target_link_libraries(uSockets PUBLIC ${ZLIB_LIBRARY})
+      target_include_directories(uSockets PUBLIC ${ZLIB_INCLUDE_DIR})
+    endif()
+
+    set_property(TARGET uwebsockets::uwebsockets APPEND PROPERTY
+      INTERFACE_LINK_LIBRARIES "${ZLIB_LIBRARY}"
+    )
+    set_property(TARGET uwebsockets::uwebsockets APPEND PROPERTY
+      INTERFACE_INCLUDE_DIRECTORIES "${ZLIB_INCLUDE_DIR}"
+    )
+    set_property(TARGET uwebsockets::uwebsockets APPEND PROPERTY
+      INTERFACE_COMPILE_DEFINITIONS "UWS_WITH_PROXY"
+    )
+    message(STATUS "uWebSockets: zlib support enabled")
+  else()
+    set_property(TARGET uwebsockets::uwebsockets APPEND PROPERTY
+      INTERFACE_COMPILE_DEFINITIONS "UWS_NO_ZLIB"
+    )
+    message(STATUS "uWebSockets: zlib not found - compression disabled")
+  endif()
+else()
+  set_property(TARGET uwebsockets::uwebsockets APPEND PROPERTY
+    INTERFACE_COMPILE_DEFINITIONS "UWS_NO_ZLIB"
+  )
+endif()
+
 set_property(TARGET uwebsockets::uwebsockets PROPERTY
   INTERFACE_LINK_LIBRARIES "uSockets;Threads::Threads"
 )
+
+# Add include directory so that #include <App.h> works
+# Using the already computed _UWS_INCLUDE_DIR which contains the headers
+include_directories("${_UWS_INCLUDE_DIR}")
 
 message(STATUS "uWebSockets configured successfully")
