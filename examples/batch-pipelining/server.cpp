@@ -2,6 +2,7 @@
 #include <vector>
 
 #include <capnwebcpp/rpc_service.hpp>
+#include <capnwebcpp/file_service.hpp>
 
 using namespace capnwebcpp;
 
@@ -114,9 +115,23 @@ private:
 
 int main(int argc, char** argv)
 {
-    /*
-    const int port = argc > 1 ? std::atoi(argv[1]) : 8000;
-    runRpcServer<UserServer>(port, "/rpc");
-    */
+    if (argc > 1)
+    {
+        const auto port = 8000;
+        const auto path = argv[1];
+
+        uWS::App app;
+        setupRpcEndpoint(app, "/rpc", std::make_shared<UserServer>());
+        setupFileEndpoint(app, "/static/", path);
+
+        app.listen(port, [port](auto* token)
+        {
+            if (token)
+                std::cout << "Listening on port " << port << std::endl;
+            else
+                std::cerr << "Failed to listen on port " << port << std::endl;
+        })
+        .run();
+    }
     return 0;
 }

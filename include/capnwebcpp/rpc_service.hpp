@@ -2,6 +2,8 @@
 
 #include <memory>
 #include <string>
+#include <sstream>
+#include <vector>
 #include <functional>
 #include <unordered_map>
 
@@ -47,6 +49,7 @@ private:
 struct RpcSessionData
 {
     std::unordered_map<int, json> pendingResults;
+    std::unordered_map<int, json> pendingOperations;
     int nextExportId = 1;
     std::shared_ptr<RpcTarget> target;
 };
@@ -73,14 +76,16 @@ private:
     json handlePull(RpcSessionData* sessionData, int exportId);
     void handleRelease(RpcSessionData* sessionData, int exportId, int refcount);
     void handleAbort(RpcSessionData* sessionData, const json& errorData);
+    json resolvePipelineReferences(RpcSessionData* sessionData, const json& value);
 };
 
-// Helper function to set up WebSocket RPC endpoint with uWebSockets
+// Helper function to set up RPC endpoint with uWebSockets (both WebSocket and HTTP POST)
 template<typename App>
 void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarget> target)
 {
     auto session = std::make_shared<RpcSession>(target);
 
+    // Set up WebSocket endpoint
     app.template ws<RpcSessionData>(path,
     {
         .open = [session, target](auto* ws)
@@ -94,6 +99,7 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
             auto* userData = ws->getUserData();
             try
             {
+                std::cout << __FUNCTION__ << ": received message: " << message << std::endl;
                 std::string response = session->handleMessage(userData, std::string(message));
                 if (!response.empty())
                     ws->send(response, uWS::TEXT);
@@ -112,6 +118,82 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
             auto* userData = ws->getUserData();
             session->onClose(userData);
         }
+    });
+
+    // Set up HTTP POST endpoint for batch RPC using the same protocol
+    app.post(path, [session, target](auto* res, auto* req)
+    {
+        std::string body;
+
+        res->onAborted([]() {
+            std::cerr << "HTTP request aborted" << std::endl;
+        });
+
+        res->onData([res, session, target, body = std::move(body)](std::string_view data, bool isEnd) mutable
+        {
+            body.append(data);
+
+            if (isEnd)
+            {
+                try
+                {
+                    std::cout << "HTTP POST received: " << body << std::endl;
+
+                    // Create a session data for this HTTP batch request
+                    RpcSessionData sessionData;
+                    sessionData.target = target;
+                    sessionData.nextExportId = 1;
+
+                    // Split the body by newlines to get individual messages
+                    std::vector<std::string> responses;
+                    std::istringstream stream(body);
+                    std::string line;
+
+                    while (std::getline(stream, line))
+                    {
+                        if (!line.empty())
+                        {
+                            // Process each message line
+                            std::string response = session->handleMessage(&sessionData, line);
+                            if (!response.empty())
+                            {
+                                responses.push_back(response);
+                            }
+                        }
+                    }
+
+                    res->writeHeader("Content-Type", "text/plain");
+                    res->writeHeader("Access-Control-Allow-Origin", "*");
+
+                    // Join responses with newlines
+                    std::string responseBody;
+                    for (size_t i = 0; i < responses.size(); ++i)
+                    {
+                        if (i > 0) responseBody += "\n";
+                        responseBody += responses[i];
+                    }
+
+                    res->end(responseBody);
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "Error processing HTTP POST: " << e.what() << std::endl;
+                    res->writeHeader("Content-Type", "text/plain");
+                    res->writeHeader("Access-Control-Allow-Origin", "*");
+                    res->writeStatus("500 Internal Server Error");
+                    res->end("Internal server error");
+                }
+            }
+        });
+    });
+
+    // Also set up OPTIONS for CORS preflight
+    app.options(path, [](auto* res, auto* req)
+    {
+        res->writeHeader("Access-Control-Allow-Origin", "*");
+        res->writeHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+        res->writeHeader("Access-Control-Allow-Headers", "Content-Type");
+        res->end();
     });
 }
 
