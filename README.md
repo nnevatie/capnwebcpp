@@ -1,2 +1,2 @@
 # capnwebcpp
-Cap'n Web C++ Server Library
+[Cap'n Web](https://github.com/cloudflare/capnweb) C++ Server Library
