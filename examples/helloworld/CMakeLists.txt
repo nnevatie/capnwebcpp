@@ -4,4 +4,4 @@ project(helloworld LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 
 add_executable(${PROJECT_NAME} server.cpp)
-target_link_libraries(${PROJECT_NAME} capnwebcpp nlohmann_json::nlohmann_json)
+target_link_libraries(${PROJECT_NAME} capnwebcpp)
