@@ -1,8 +1,11 @@
 # Cap'n Web RPC C++ Library
 
+# Glob all cpp files in src directory
+file(GLOB CAPNWEBCPP_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+
 # Create the library
 add_library(capnwebcpp STATIC
-    rpc_session.cpp
+    ${CAPNWEBCPP_SOURCES}
 )
 
 # Set include directories

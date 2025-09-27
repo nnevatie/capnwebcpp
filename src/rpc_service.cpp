@@ -1,4 +1,5 @@
-#include "capnwebcpp/rpc_session.hpp"
+#include "capnwebcpp/rpc_service.hpp"
+
 #include <iostream>
 
 namespace capnwebcpp

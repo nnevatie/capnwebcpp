@@ -1,6 +1,7 @@
-#include <capnwebcpp/capnwebcpp.hpp>
 #include <map>
 #include <vector>
+
+#include <capnwebcpp/rpc_service.hpp>
 
 using namespace capnwebcpp;
 
@@ -113,7 +114,9 @@ private:
 
 int main(int argc, char** argv)
 {
+    /*
     const int port = argc > 1 ? std::atoi(argv[1]) : 8000;
     runRpcServer<UserServer>(port, "/rpc");
+    */
     return 0;
 }

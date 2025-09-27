@@ -1,6 +1,5 @@
-#include <thread>
-
-#include <capnwebcpp/capnwebcpp.hpp>
+#include <capnwebcpp/rpc_service.hpp>
+#include <capnwebcpp/file_service.hpp>
 
 using namespace capnwebcpp;
 
@@ -22,11 +21,19 @@ int main(int argc, char** argv)
     {
         const auto port = 8000;
         const auto path = argv[1];
-        std::thread thread([port]()
+
+        uWS::App app;
+        setupRpcEndpoint(app, "/api", std::make_shared<HelloServer>());
+        setupFileEndpoint(app, "/static/", path);
+
+        app.listen(port, [port](auto* token)
         {
-            runRpcServer<HelloServer>(port, "/api");
-        });
-        runFileServer(port, path, "/static/");
+            if (token)
+                std::cout << "Listening on port " << port << std::endl;
+            else
+                std::cerr << "Failed to listen on port " << port << std::endl;
+        })
+        .run();
     }
     return 0;
 }

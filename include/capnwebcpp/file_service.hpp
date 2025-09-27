@@ -1,49 +1,16 @@
 #pragma once
 
-// Main header for capnwebcpp library
-// Provides Cap'n Web RPC protocol implementation for C++
-
-#include "capnwebcpp/rpc_session.hpp"
-#include <filesystem>
 #include <fstream>
-#include <sstream>
+#include <iostream>
+#include <filesystem>
 
 namespace capnwebcpp
 {
 
-// Convenience function to create and run a simple RPC server
-template<typename RpcTargetType>
-void runRpcServer(int port, const std::string& path = "/api")
+template<typename App>
+void setupFileEndpoint(App& app, const std::string& path, const std::filesystem::path& root)
 {
-    auto target = std::make_shared<RpcTargetType>();
-
-    uWS::App app;
-
-    // Setup HTTP endpoint that returns a simple message
-    app.get(path, [path](auto* res, auto* req)
-    {
-        res->end("Cap'n Web RPC endpoint available at WebSocket path: " + path);
-    });
-
-    // Setup WebSocket RPC endpoint
-    setupRpcEndpoint(app, path, target);
-
-    // Start listening
-    app.listen(port, [port](auto* token)
-    {
-        if (token)
-            std::cout << "Listening on port " << port << std::endl;
-        else
-            std::cerr << "Failed to listen on port " << port << std::endl;
-    }).run();
-}
-
-// Function to serve static files from a filesystem directory
-inline void runFileServer(int port, const std::filesystem::path& fsRoot, const std::string& path = "/")
-{
-    // Setup catch-all route for static files
-    uWS::App app;
-    app.get(path + "*", [fsRoot, path](auto* res, auto* req)
+    app.get(path + "*", [root, path](auto* res, auto* req)
     {
         std::string url(req->getUrl());
 
@@ -61,10 +28,10 @@ inline void runFileServer(int port, const std::filesystem::path& fsRoot, const s
             filePath += "index.html";
 
         // Construct full filesystem path
-        std::filesystem::path fullPath = fsRoot / filePath;
+        std::filesystem::path fullPath = root / filePath;
 
         // Security check: ensure the path is within fsRoot
-        std::filesystem::path canonicalBase = std::filesystem::weakly_canonical(fsRoot);
+        std::filesystem::path canonicalBase = std::filesystem::weakly_canonical(root);
         std::filesystem::path canonicalPath = std::filesystem::weakly_canonical(fullPath);
 
         std::cout << "Serving file: " << canonicalPath << std::endl;
@@ -123,21 +90,6 @@ inline void runFileServer(int port, const std::filesystem::path& fsRoot, const s
         res->writeHeader("Content-Type", contentType);
         res->end(content);
     });
-
-    // Start listening
-    app.listen(port, [port, fsRoot, path](auto* token)
-    {
-        if (token)
-        {
-            std::cout << "File server listening on port " << port << std::endl;
-            std::cout << "Serving files from: " << fsRoot << std::endl;
-            std::cout << "URL path: " << path << std::endl;
-        }
-        else
-        {
-            std::cerr << "Failed to listen on port " << port << std::endl;
-        }
-    }).run();
 }
 
 } // namespace capnwebcpp
