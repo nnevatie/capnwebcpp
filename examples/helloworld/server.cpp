@@ -20,15 +20,6 @@ int main(int argc, char** argv)
         res->end("Hello World!");
     })
     .ws<PerSocketData>("/api", {
-        .compression = uWS::DISABLED,
-        .maxPayloadLength = 16 * 1024 * 1024,
-        .idleTimeout = 120,
-        .maxBackpressure = 1 * 1024 * 1024,
-        .closeOnBackpressureLimit = false,
-        .resetIdleTimeoutOnSend = false,
-        .sendPingsAutomatically = true,
-
-        .upgrade = nullptr,
         .open = [](auto* ws) {
             std::cout << "WebSocket connection opened" << std::endl;
             ws->getUserData()->nextExportId = 1;  // Reset to 1 for new connections
