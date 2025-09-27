@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(uwebsockets)
+include(nlohmann_json)
 
 add_library(capnwebcpp src/capnwebcpp.cpp)
 target_link_libraries(capnwebcpp PUBLIC uwebsockets::uwebsockets)
