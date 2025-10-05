@@ -260,7 +260,10 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
             itExp->second.args = json();
             protocol::Message msg;
             msg.type = protocol::MessageType::Reject;
-            msg.params = json::array({ exportId, serialize::makeError("MethodError", std::string(e.what())) });
+            json err = serialize::makeError("MethodError", std::string(e.what()));
+            if (onSendError)
+                err = onSendError(err);
+            msg.params = json::array({ exportId, err });
             return msg;
         }
     }
@@ -268,7 +271,12 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
     {
         protocol::Message msg;
         msg.type = protocol::MessageType::Reject;
-        msg.params = json::array({ exportId, serialize::makeError("ExportNotFound", "Export ID not found") });
+        {
+            json err = serialize::makeError("ExportNotFound", "Export ID not found");
+            if (onSendError)
+                err = onSendError(err);
+            msg.params = json::array({ exportId, err });
+        }
         return msg;
     }
 }

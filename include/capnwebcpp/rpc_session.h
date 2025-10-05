@@ -56,6 +56,8 @@ class RpcSession
 {
 public:
     explicit RpcSession(std::shared_ptr<RpcTarget> target) : target(target) {}
+    // Optional: rewrite error tuple before sending (e.g., redaction)
+    void setOnSendError(std::function<json(const json&)> cb) { onSendError = std::move(cb); }
 
     // Handle incoming message; returns a response (possibly empty).
     std::string handleMessage(RpcSessionData* sessionData, const std::string& message);
@@ -78,6 +80,7 @@ private:
     int pullCount = 0;
     bool aborted = false;
     std::vector<std::function<void(const std::string&)>> onBrokenCallbacks;
+    std::function<json(const json&)> onSendError;
 
     void handlePush(RpcSessionData* sessionData, const json& pushData);
     protocol::Message handlePull(RpcSessionData* sessionData, int exportId);

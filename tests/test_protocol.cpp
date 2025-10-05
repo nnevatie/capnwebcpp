@@ -82,6 +82,40 @@ static bool testSerializeHelpers()
     // makeError
     ok &= require(makeError("TypeError", "bad") == json::array({"error", "TypeError", "bad"}), "makeError: shape");
 
+    // Devaluation of extended types
+    ok &= require(devaluateForResult(json{ {"$bigint", "123"} }, [](bool, const json&){ return -1; })
+                  == json::array({"bigint", "123"}), "devaluate: bigint");
+    ok &= require(devaluateForResult(json{ {"$date", 1234} }, [](bool, const json&){ return -1; })
+                  == json::array({"date", 1234}), "devaluate: date");
+    ok &= require(devaluateForResult(json{ {"$bytes", "aGVsbG8="} }, [](bool, const json&){ return -1; })
+                  == json::array({"bytes", "aGVsbG8="}), "devaluate: bytes");
+    ok &= require(devaluateForResult(json{ {"$undefined", true} }, [](bool, const json&){ return -1; })
+                  == json::array({"undefined"}), "devaluate: undefined");
+    ok &= require(devaluateForResult(json{ {"$error", json{{"name","Error"},{"message","m"}} } }, [](bool, const json&){ return -1; })
+                  == json::array({"error", "Error", "m"}), "devaluate: error");
+
+    // Evaluator of extended types
+    ok &= require(Evaluator::evaluateValue(json::array({"bigint","123"}),
+                                           [](int,json&){return false;}, [](int,std::string&,json&){return false;},
+                                           [](const std::string&, const json&){return json();}, [](int,const json&){} )
+                  == json{ {"$bigint","123"} }, "evaluate: bigint");
+    ok &= require(Evaluator::evaluateValue(json::array({"date",1234}),
+                                           [](int,json&){return false;}, [](int,std::string&,json&){return false;},
+                                           [](const std::string&, const json&){return json();}, [](int,const json&){} )
+                  == json{ {"$date",1234} }, "evaluate: date");
+    ok &= require(Evaluator::evaluateValue(json::array({"bytes","aGVsbG8="}),
+                                           [](int,json&){return false;}, [](int,std::string&,json&){return false;},
+                                           [](const std::string&, const json&){return json();}, [](int,const json&){} )
+                  == json{ {"$bytes","aGVsbG8="} }, "evaluate: bytes");
+    ok &= require(Evaluator::evaluateValue(json::array({"undefined"}),
+                                           [](int,json&){return false;}, [](int,std::string&,json&){return false;},
+                                           [](const std::string&, const json&){return json();}, [](int,const json&){} )
+                  == json{ {"$undefined",true} }, "evaluate: undefined");
+    ok &= require(Evaluator::evaluateValue(json::array({"error","Error","m"}),
+                                           [](int,json&){return false;}, [](int,std::string&,json&){return false;},
+                                           [](const std::string&, const json&){return json();}, [](int,const json&){} )
+                  == json{ {"$error", json{{"name","Error"},{"message","m"}} } }, "evaluate: error");
+
     return ok;
 }
 

@@ -56,6 +56,39 @@ static json devaluateObjectForResult(const json& obj, const std::function<int(bo
     // Special sentinel objects to request export/promise emission.
     if (obj.is_object())
     {
+        // Extended types
+        auto itBig = obj.find("$bigint");
+        if (itBig != obj.end() && itBig->is_string())
+        {
+            return json::array({ "bigint", *itBig });
+        }
+        auto itDate = obj.find("$date");
+        if (itDate != obj.end() && (itDate->is_number_integer() || itDate->is_number()))
+        {
+            return json::array({ "date", *itDate });
+        }
+        auto itBytes = obj.find("$bytes");
+        if (itBytes != obj.end() && itBytes->is_string())
+        {
+            return json::array({ "bytes", *itBytes });
+        }
+        auto itUndef = obj.find("$undefined");
+        if (itUndef != obj.end() && itUndef->is_boolean() && *itUndef)
+        {
+            return json::array({ "undefined" });
+        }
+        auto itErr = obj.find("$error");
+        if (itErr != obj.end() && itErr->is_object())
+        {
+            const json& eobj = *itErr;
+            std::string name = eobj.value("name", std::string("Error"));
+            std::string message = eobj.value("message", std::string(""));
+            json arr = json::array({ "error", name, message });
+            if (eobj.contains("stack") && eobj["stack"].is_string())
+                arr.push_back(eobj["stack"]);
+            return arr;
+        }
+
         auto itExp = obj.find("$export");
         if (itExp != obj.end() && itExp->is_boolean() && *itExp)
         {
@@ -125,6 +158,44 @@ json Evaluator::evaluateValue(const json& value,
 {
     if (value.is_array())
     {
+        // Handle extended types first
+        if (value.size() >= 1 && value[0].is_string())
+        {
+            const std::string tag = value[0];
+            if (tag == "bigint")
+            {
+                if (value.size() >= 2 && value[1].is_string())
+                    return json{ {"$bigint", value[1]} };
+            }
+            else if (tag == "date")
+            {
+                if (value.size() >= 2 && (value[1].is_number() || value[1].is_number_integer()))
+                    return json{ {"$date", value[1]} };
+            }
+            else if (tag == "bytes")
+            {
+                if (value.size() >= 2 && value[1].is_string())
+                    return json{ {"$bytes", value[1]} };
+            }
+            else if (tag == "undefined")
+            {
+                return json{ {"$undefined", true} };
+            }
+            else if (tag == "error")
+            {
+                // ["error", name, message, optional stack]
+                if (value.size() >= 3 && value[1].is_string() && value[2].is_string())
+                {
+                    json e = json::object({
+                        {"name", value[1].get<std::string>()},
+                        {"message", value[2].get<std::string>()}
+                    });
+                    if (value.size() >= 4 && value[3].is_string())
+                        e["stack"] = value[3].get<std::string>();
+                    return json{ {"$error", e} };
+                }
+            }
+        }
         if (value.size() >= 2 && value[0].is_string() && value[0] == "pipeline" && value[1].is_number())
         {
             int exportId = value[1];
