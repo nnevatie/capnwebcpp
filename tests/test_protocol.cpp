@@ -99,6 +99,16 @@ int main()
         out = session.handleMessage(&data, std::string("[\"reject\",8,[\"error\",\"X\",\"Y\"]]"));
         failed += !(json::parse(out) == json::parse("[\"release\",8,1]"));
     }
+    // Test import release count > 1
+    {
+        capnwebcpp::RpcSession session(nullptr);
+        capnwebcpp::RpcSessionData data;
+        // Pretend the peer believes we hold two remote refs to import 42
+        data.imports[42].remoteRefcount = 2;
+        data.imports[42].localRefcount = 1;
+        std::string out = session.handleMessage(&data, std::string("[\"resolve\",42,\"ok\"]"));
+        failed += !(json::parse(out) == json::parse("[\"release\",42,2]"));
+    }
     if (failed == 0)
     {
         std::cout << "All protocol/serialize tests passed" << std::endl;
