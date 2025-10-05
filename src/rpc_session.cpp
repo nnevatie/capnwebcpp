@@ -37,7 +37,10 @@ std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::st
         case protocol::MessageType::Pull:
         {
             if (m.params.size() >= 1 && m.params[0].is_number())
-                return handlePull(sessionData, m.params[0]).dump();
+            {
+                auto out = handlePull(sessionData, m.params[0]);
+                return protocol::serialize(out);
+            }
             return "";
         }
         case protocol::MessageType::Release:
@@ -171,16 +174,24 @@ json RpcSession::resolvePipelineReferences(RpcSessionData* sessionData, const js
     }
 }
 
-json RpcSession::handlePull(RpcSessionData* sessionData, int exportId)
+protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int exportId)
 {
     if (sessionData->pendingResults.find(exportId) != sessionData->pendingResults.end())
     {
         json& result = sessionData->pendingResults[exportId];
-        json response = (result.is_array() && result.size() >= 2 && result[0] == "error")
-            ? serialize::rejectFrame(exportId, result)
-            : serialize::resolveFrame(exportId, result);
+        protocol::Message msg;
+        if (result.is_array() && result.size() >= 2 && result[0] == "error")
+        {
+            msg.type = protocol::MessageType::Reject;
+            msg.params = json::array({ exportId, result });
+        }
+        else
+        {
+            msg.type = protocol::MessageType::Resolve;
+            msg.params = json::array({ exportId, serialize::wrapArrayIfNeeded(result) });
+        }
         sessionData->pendingResults.erase(exportId);
-        return response;
+        return msg;
     }
     else if (sessionData->pendingOperations.find(exportId) != sessionData->pendingOperations.end())
     {
@@ -197,20 +208,27 @@ json RpcSession::handlePull(RpcSessionData* sessionData, int exportId)
             sessionData->pendingResults[exportId] = result;
             sessionData->pendingOperations.erase(exportId);
 
-            return serialize::resolveFrame(exportId, result);
+            protocol::Message msg;
+            msg.type = protocol::MessageType::Resolve;
+            msg.params = json::array({ exportId, serialize::wrapArrayIfNeeded(result) });
+            return msg;
         }
         catch (const std::exception& e)
         {
             sessionData->pendingOperations.erase(exportId);
 
-            json error = serialize::makeError("MethodError", std::string(e.what()));
-            return serialize::rejectFrame(exportId, error);
+            protocol::Message msg;
+            msg.type = protocol::MessageType::Reject;
+            msg.params = json::array({ exportId, serialize::makeError("MethodError", std::string(e.what())) });
+            return msg;
         }
     }
     else
     {
-        return serialize::rejectFrame(exportId,
-            serialize::makeError("ExportNotFound", "Export ID not found"));
+        protocol::Message msg;
+        msg.type = protocol::MessageType::Reject;
+        msg.params = json::array({ exportId, serialize::makeError("ExportNotFound", "Export ID not found") });
+        return msg;
     }
 }
 

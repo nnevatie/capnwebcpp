@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include "capnwebcpp/rpc_target.h"
+#include "capnwebcpp/protocol.h"
 
 namespace capnwebcpp
 {
@@ -39,7 +40,7 @@ private:
     std::shared_ptr<RpcTarget> target;
 
     void handlePush(RpcSessionData* sessionData, const json& pushData);
-    json handlePull(RpcSessionData* sessionData, int exportId);
+    protocol::Message handlePull(RpcSessionData* sessionData, int exportId);
     void handleRelease(RpcSessionData* sessionData, int exportId, int refcount);
     void handleAbort(RpcSessionData* sessionData, const json& errorData);
     json resolvePipelineReferences(RpcSessionData* sessionData, const json& value);
