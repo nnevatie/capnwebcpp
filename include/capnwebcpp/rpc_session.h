@@ -10,48 +10,14 @@
 
 #include "capnwebcpp/rpc_target.h"
 #include "capnwebcpp/protocol.h"
+#include "capnwebcpp/session_state.h"
 
 namespace capnwebcpp
 {
 
 using json = nlohmann::json;
 
-// Export table entry, tracks either a pending operation or a computed result,
-// along with the remote refcount for release semantics.
-struct ExportEntry
-{
-    int remoteRefcount = 1;           // Remote-held references to this export
-    int localRefcount = 1;            // Local references (future use)
-    bool hasResult = false;
-    json result;                      // Valid if hasResult
-
-    bool hasOperation = false;
-    std::string method;               // Valid if hasOperation
-    json args;                        // Valid if hasOperation
-
-    // Target on which to dispatch calls for this export (for server-originated exports/stubs).
-    std::shared_ptr<RpcTarget> callTarget;
-};
-
-// Import table entry scaffolding for future inbound exports/promises.
-struct ImportEntry
-{
-    int localRefcount = 1;            // Our local references
-    int remoteRefcount = 1;           // Remote-held references (peer believes we hold)
-    bool hasResolution = false;       // True if resolve/reject received
-    json resolution;                  // Resolved value or error tuple
-};
-
-// Internal data associated with each connection/session.
-struct RpcSessionData
-{
-    std::unordered_map<int, ExportEntry> exports; // exportId -> entry
-    std::unordered_map<int, ImportEntry> imports; // importId -> entry (scaffolding)
-    int nextExportId = 1;                         // Export IDs aligned to client push order (for pull)
-    int nextExportIdNegative = -1;                // Server-chosen negative IDs for exporter-originated
-    int nextImportId = 1;                         // Import IDs we may allocate if we send pushes
-    std::shared_ptr<RpcTarget> target;
-};
+// Importer/Exporter roles and RpcSessionData are defined in session_state.h
 
 // RpcSession handles the Cap'n Web RPC protocol for a connection.
 class RpcSession
@@ -117,7 +83,7 @@ private:
     // Allocate a new negative export ID for server-originated exports/promises.
     int allocateNegativeExportId(RpcSessionData* sessionData)
     {
-        return sessionData->nextExportIdNegative--;
+        return sessionData->exporter.allocateNegativeExportId();
     }
 };
 

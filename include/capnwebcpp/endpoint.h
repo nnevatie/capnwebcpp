@@ -76,7 +76,7 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
                 {
                     RpcSessionData sessionData;
                     sessionData.target = target;
-                    sessionData.nextExportId = 1;
+                    sessionData.exporter.reset();
 
                     std::vector<std::string> responses = processBatch(*session, &sessionData, body);
 

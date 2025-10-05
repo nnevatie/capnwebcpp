@@ -12,8 +12,8 @@ namespace capnwebcpp
 void RpcSession::onOpen(RpcSessionData* sessionData)
 {
     std::cout << "WebSocket connection opened" << std::endl;
-    sessionData->nextExportId = 1;
-    sessionData->exports.clear();
+    sessionData->exporter.reset();
+    sessionData->importer.reset();
     pullCount = 0;
     aborted = false;
 }
@@ -59,17 +59,11 @@ std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::st
             if (m.params.size() >= 2 && m.params[0].is_number())
             {
                 int importId = m.params[0];
-                auto& imp = sessionData->imports[importId];
-                imp.hasResolution = true;
-                imp.resolution = m.params[1];
-
                 // Parity: after import resolves/rejects, send release for remote refs.
+                int releaseCount = sessionData->importer.recordResolutionAndGetReleaseCount(importId, m.params[1]);
                 protocol::Message rel;
                 rel.type = protocol::MessageType::Release;
-                int releaseCount = imp.remoteRefcount > 0 ? imp.remoteRefcount : 1;
                 rel.params = json::array({ importId, releaseCount });
-                // Clean up local import entry.
-                sessionData->imports.erase(importId);
                 return protocol::serialize(rel);
             }
             return "";
@@ -98,7 +92,7 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
     if (!pushData.is_array())
         return;
 
-    int exportId = sessionData->nextExportId++;
+    int exportId = sessionData->exporter.allocateForPush();
 
     if (pushData[0] == "pipeline" && pushData.size() >= 3)
     {
@@ -118,37 +112,30 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
                 callTarget = itTarget->second.callTarget;
             }
 
-            ExportEntry entry;
-            entry.remoteRefcount = 1;
-            entry.hasOperation = true;
-            entry.method = method;
-            entry.args = argsArray;
-            entry.callTarget = callTarget;
+            sessionData->exporter.setOperation(exportId, method, argsArray, callTarget);
 
             // Defer evaluation to microtask queue; transmit still waits for pull.
             int queuedExportId = exportId;
             json queuedArgs = argsArray;
             enqueueTask([this, sessionData, queuedExportId, method, queuedArgs, callTarget]() mutable
             {
-                auto it = sessionData->exports.find(queuedExportId);
-                if (it == sessionData->exports.end()) return;
+                auto* it = sessionData->exporter.find(queuedExportId);
+                if (!it) return;
                 try
                 {
                     json resolvedArgs = resolvePipelineReferences(sessionData, queuedArgs);
                     json result = callTarget->dispatch(method, resolvedArgs);
-                    it->second.hasOperation = false;
-                    it->second.hasResult = true;
-                    it->second.result = result;
+                    it->hasOperation = false;
+                    it->hasResult = true;
+                    it->result = result;
                 }
                 catch (const std::exception& e)
                 {
-                    it->second.hasOperation = false;
-                    it->second.hasResult = true;
-                    it->second.result = serialize::makeError("MethodError", std::string(e.what()));
+                    it->hasOperation = false;
+                    it->hasResult = true;
+                    it->result = serialize::makeError("MethodError", std::string(e.what()));
                 }
             });
-
-            sessionData->exports[exportId] = std::move(entry);
         }
     }
     else if (pushData[0] == "remap")
@@ -161,24 +148,17 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
         {
             auto getResult = [sessionData](int id, json& out) -> bool
             {
-                auto it = sessionData->exports.find(id);
-                if (it != sessionData->exports.end() && it->second.hasResult)
+                json r;
+                if (sessionData->exporter.getResult(id, r))
                 {
-                    out = it->second.result;
+                    out = r;
                     return true;
                 }
                 return false;
             };
             auto getOperation = [sessionData](int id, std::string& method, json& args) -> bool
             {
-                auto it = sessionData->exports.find(id);
-                if (it != sessionData->exports.end() && it->second.hasOperation)
-                {
-                    method = it->second.method;
-                    args = it->second.args;
-                    return true;
-                }
-                return false;
+                return sessionData->exporter.getOperation(id, method, args);
             };
             auto dispatch = [this, sessionData](const std::string& method, const json& args) -> json
             {
@@ -186,17 +166,15 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
             };
             auto cache = [sessionData](int id, const json& result)
             {
-                auto& e = sessionData->exports[id];
-                e.hasResult = true;
-                e.result = result;
-                e.hasOperation = false;
+                sessionData->exporter.cacheResult(id, result);
             };
             auto callExport = [this, sessionData](int exportId, const json& path, const json& args) -> json
             {
                 std::shared_ptr<RpcTarget> ct = sessionData->target;
-                auto it = sessionData->exports.find(exportId);
-                if (it != sessionData->exports.end() && it->second.callTarget)
-                    ct = it->second.callTarget;
+                if (auto* it = sessionData->exporter.find(exportId))
+                {
+                    if (it->callTarget) ct = it->callTarget;
+                }
                 if (!path.is_array() || path.empty() || !path[0].is_string())
                     throw std::runtime_error("invalid export call path");
                 std::string method = path[0].get<std::string>();
@@ -211,7 +189,7 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
             entry.hasResult = true;
             entry.result = serialize::makeError("MethodError", std::string(e.what()));
         }
-        sessionData->exports[exportId] = std::move(entry);
+        sessionData->exporter.put(exportId, entry);
     }
 }
 
@@ -219,10 +197,10 @@ json RpcSession::resolvePipelineReferences(RpcSessionData* sessionData, const js
 {
     auto getResult = [sessionData](int exportId, json& out) -> bool
     {
-        auto it = sessionData->exports.find(exportId);
-        if (it != sessionData->exports.end() && it->second.hasResult)
+        json r;
+        if (sessionData->exporter.getResult(exportId, r))
         {
-            out = it->second.result;
+            out = r;
             return true;
         }
         return false;
@@ -230,14 +208,7 @@ json RpcSession::resolvePipelineReferences(RpcSessionData* sessionData, const js
 
     auto getOperation = [sessionData](int exportId, std::string& method, json& args) -> bool
     {
-        auto it = sessionData->exports.find(exportId);
-        if (it != sessionData->exports.end() && it->second.hasOperation)
-        {
-            method = it->second.method;
-            args = it->second.args;
-            return true;
-        }
-        return false;
+        return sessionData->exporter.getOperation(exportId, method, args);
     };
 
     auto dispatch = [this, sessionData](const std::string& method, const json& args) -> json
@@ -247,12 +218,7 @@ json RpcSession::resolvePipelineReferences(RpcSessionData* sessionData, const js
 
     auto cache = [sessionData](int exportId, const json& result)
     {
-        auto& entry = sessionData->exports[exportId];
-        entry.hasResult = true;
-        entry.result = result;
-        entry.hasOperation = false;
-        entry.method.clear();
-        entry.args = json();
+        sessionData->exporter.cacheResult(exportId, result);
     };
 
     return serialize::Evaluator::evaluateValue(value, getResult, getOperation, dispatch, cache);
@@ -262,10 +228,10 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
 {
     // Before responding, process any queued microtasks so results are ready.
     processTasks();
-    auto itExp = sessionData->exports.find(exportId);
-    if (itExp != sessionData->exports.end() && itExp->second.hasResult)
+    auto* itExp = sessionData->exporter.find(exportId);
+    if (itExp && itExp->hasResult)
     {
-        json& result = itExp->second.result;
+        json& result = itExp->result;
         protocol::Message msg;
         if (result.is_array() && result.size() >= 2 && result[0] == "error")
         {
@@ -289,7 +255,7 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
                     e.hasResult = false;
                 }
                 e.callTarget = sessionData->target;
-                sessionData->exports[id] = e;
+                sessionData->exporter.put(id, e);
                 return id;
             });
             if (deval.is_array() && serialize::isSpecialArray(deval))
@@ -298,26 +264,26 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
                 msg.params = json::array({ exportId, serialize::wrapArrayIfNeeded(deval) });
         }
         // Clear result after sending; keep entry for refcount tracking if needed.
-        itExp->second.hasResult = false;
-        itExp->second.result = json();
+        itExp->hasResult = false;
+        itExp->result = json();
         return msg;
     }
-    else if (itExp != sessionData->exports.end() && itExp->second.hasOperation)
+    else if (itExp && itExp->hasOperation)
     {
-        std::string method = itExp->second.method;
-        json args = itExp->second.args;
+        std::string method = itExp->method;
+        json args = itExp->args;
 
         try
         {
             json resolvedArgs = resolvePipelineReferences(sessionData, args);
 
-            std::shared_ptr<RpcTarget> callTarget = itExp->second.callTarget ? itExp->second.callTarget : sessionData->target;
+            std::shared_ptr<RpcTarget> callTarget = itExp->callTarget ? itExp->callTarget : sessionData->target;
             json result = callTarget->dispatch(method, resolvedArgs);
-            itExp->second.hasOperation = false;
-            itExp->second.method.clear();
-            itExp->second.args = json();
-            itExp->second.hasResult = true;
-            itExp->second.result = result;
+            itExp->hasOperation = false;
+            itExp->method.clear();
+            itExp->args = json();
+            itExp->hasResult = true;
+            itExp->result = result;
 
             protocol::Message msg;
             msg.type = protocol::MessageType::Resolve;
@@ -334,7 +300,7 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
                     e.hasResult = false;
                 }
                 e.callTarget = sessionData->target;
-                sessionData->exports[id] = e;
+                sessionData->exporter.put(id, e);
                 return id;
             });
             if (deval.is_array() && serialize::isSpecialArray(deval))
@@ -346,9 +312,9 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
         catch (const std::exception& e)
         {
             // Clear operation on error as well.
-            itExp->second.hasOperation = false;
-            itExp->second.method.clear();
-            itExp->second.args = json();
+            itExp->hasOperation = false;
+            itExp->method.clear();
+            itExp->args = json();
             protocol::Message msg;
             msg.type = protocol::MessageType::Reject;
             json err = serialize::makeError("MethodError", std::string(e.what()));
@@ -374,23 +340,13 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
 
 void RpcSession::handleRelease(RpcSessionData* sessionData, int exportId, int refcount)
 {
-    auto it = sessionData->exports.find(exportId);
-    if (it == sessionData->exports.end())
+    auto* it = sessionData->exporter.find(exportId);
+    if (!it)
     {
         std::cout << "Release for unknown exportId " << exportId << std::endl;
         return;
     }
-
-    // Decrement remote refcount and clean up on zero.
-    if (refcount > 0)
-    {
-        it->second.remoteRefcount -= refcount;
-    }
-
-    if (it->second.remoteRefcount <= 0)
-    {
-        sessionData->exports.erase(it);
-    }
+    sessionData->exporter.release(exportId, refcount);
 }
 
 void RpcSession::handleAbort(RpcSessionData*, const json& errorData)
