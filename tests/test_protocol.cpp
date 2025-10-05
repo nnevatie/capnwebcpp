@@ -66,14 +66,13 @@ static bool testProtocolParseSerialize()
         ok &= require(!parse("[123]", msg), "protocol parse: reject non-string type tag");
     }
 
-    // Remap unsupported
-    try {
-        capnwebcpp::serialize::Evaluator::evaluateValue(json::array({"remap", 1, json::array(), json::array(), json::array()}),
+    // Remap minimal expression returns base input (null if unused)
+    {
+        auto val = capnwebcpp::serialize::Evaluator::evaluateValue(
+            json::array({"remap", 1, json::array(), json::array(), json::array()}),
             [](int,json&){return false;}, [](int,std::string&,json&){return false;},
             [](const std::string&, const json&){return json();}, [](int,const json&){});
-        ok &= require(false, "remap should throw");
-    } catch (...) {
-        ok &= require(true, "remap threw as expected");
+        ok &= require(val.is_null(), "remap minimal returns null");
     }
 
     return ok;

@@ -148,6 +148,67 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
             sessionData->exports[exportId] = std::move(entry);
         }
     }
+    else if (pushData[0] == "remap")
+    {
+        // Create export id for remap result and schedule evaluation via Evaluator.
+        ExportEntry entry;
+        entry.remoteRefcount = 1;
+        entry.hasOperation = true;
+        sessionData->exports[exportId] = entry;
+
+        json expr = pushData; // full remap expression
+        enqueueTask([this, sessionData, exportId, expr]() mutable
+        {
+            auto getResult = [sessionData](int id, json& out) -> bool
+            {
+                auto it = sessionData->exports.find(id);
+                if (it != sessionData->exports.end() && it->second.hasResult)
+                {
+                    out = it->second.result;
+                    return true;
+                }
+                return false;
+            };
+            auto getOperation = [sessionData](int id, std::string& method, json& args) -> bool
+            {
+                auto it = sessionData->exports.find(id);
+                if (it != sessionData->exports.end() && it->second.hasOperation)
+                {
+                    method = it->second.method;
+                    args = it->second.args;
+                    return true;
+                }
+                return false;
+            };
+            auto dispatch = [this, sessionData](const std::string& method, const json& args) -> json
+            {
+                return sessionData->target->dispatch(method, args);
+            };
+            auto cache = [sessionData](int id, const json& result)
+            {
+                auto& e = sessionData->exports[id];
+                e.hasResult = true;
+                e.result = result;
+                e.hasOperation = false;
+            };
+
+            try
+            {
+                json result = serialize::Evaluator::evaluateValue(expr, getResult, getOperation, dispatch, cache);
+                auto& e = sessionData->exports[exportId];
+                e.hasOperation = false;
+                e.hasResult = true;
+                e.result = result;
+            }
+            catch (const std::exception& e)
+            {
+                auto& ent = sessionData->exports[exportId];
+                ent.hasOperation = false;
+                ent.hasResult = true;
+                ent.result = serialize::makeError("MethodError", std::string(e.what()));
+            }
+        });
+    }
 }
 
 json RpcSession::resolvePipelineReferences(RpcSessionData* sessionData, const json& value)

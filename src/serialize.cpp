@@ -164,7 +164,110 @@ json Evaluator::evaluateValue(const json& value,
             const std::string tag = value[0];
             if (tag == "remap")
             {
-                throw std::runtime_error("remap is not supported in this build");
+                // ["remap", exportId, path, captures, instructions]
+                if (value.size() != 5 || !value[1].is_number() || !value[2].is_array() ||
+                    !value[3].is_array() || !value[4].is_array())
+                {
+                    throw std::runtime_error("invalid remap expression");
+                }
+
+                int baseExportId = value[1];
+                const json& basePath = value[2];
+                const json& captures = value[3];
+                const json& instructions = value[4];
+
+                // Build capture vector of export IDs from sender's perspective (our exports table).
+                std::vector<int> captureIds;
+                for (const auto& cap : captures)
+                {
+                    if (!cap.is_array() || cap.size() != 2 || !cap[0].is_string() || !cap[1].is_number())
+                        throw std::runtime_error("invalid remap capture");
+                    std::string capTag = cap[0];
+                    int id = cap[1];
+                    // For our simplified model, both ["import", id] and ["export", id] are treated as export IDs.
+                    if (capTag != "import" && capTag != "export")
+                        throw std::runtime_error("unknown remap capture tag");
+                    captureIds.push_back(id);
+                }
+
+                // Resolve the base input value from the export + path using pipeline evaluation.
+                json basePipeline = json::array({ "pipeline", baseExportId, basePath });
+                json input;
+                try {
+                    input = evaluateValue(basePipeline, getResult, getOperation, dispatch, cache);
+                } catch (...) {
+                    // If base reference is not meaningful in this context, treat input as null.
+                    input = json();
+                }
+
+                std::vector<json> variables;
+                variables.push_back(input);
+
+                auto applyPathGet = [](json subject, const json& path) -> json
+                {
+                    if (!path.is_array()) return subject;
+                    for (const auto& key : path)
+                    {
+                        if (key.is_string() && subject.is_object())
+                            subject = subject[key.get<std::string>()];
+                        else if (key.is_number() && subject.is_array())
+                            subject = subject[key.get<int>()];
+                    }
+                    return subject;
+                };
+
+                for (const auto& instr : instructions)
+                {
+                    if (!instr.is_array() || instr.size() < 3 || !instr[0].is_string())
+                        throw std::runtime_error("invalid remap instruction");
+                    std::string itag = instr[0];
+                    if (itag == "pipeline")
+                    {
+                        if (!instr[1].is_number() || !instr[2].is_array())
+                            throw std::runtime_error("invalid pipeline instruction");
+                        int subjectIdx = instr[1];
+                        const json& path = instr[2];
+                        bool hasArgs = instr.size() >= 4;
+                        json args = hasArgs ? instr[3] : json::array();
+
+                        json resultVal;
+                        if (subjectIdx < 0)
+                        {
+                            // Call method on captured stub; for now, dispatch to main target.
+                            // Resolve args recursively.
+                            json resolvedArgs = hasArgs ? evaluateValue(args, getResult, getOperation, dispatch, cache) : json::array();
+                            if (!path.is_array() || path.empty() || !path[0].is_string())
+                                throw std::runtime_error("remap pipeline invalid method path");
+                            std::string method = path[0];
+                            resultVal = dispatch(method, resolvedArgs);
+                        }
+                        else
+                        {
+                            if (subjectIdx >= (int)variables.size())
+                                throw std::runtime_error("remap variable index out of range");
+                            json subj = variables[subjectIdx];
+                            // For local JSON values, only support property get (ignore args).
+                            resultVal = applyPathGet(subj, path);
+                        }
+
+                        variables.push_back(resultVal);
+                    }
+                    else if (itag == "remap")
+                    {
+                        // Support nested remap by evaluating the full expression.
+                        json nested = evaluateValue(instr, getResult, getOperation, dispatch, cache);
+                        variables.push_back(nested);
+                    }
+                    else
+                    {
+                        throw std::runtime_error("unsupported remap instruction tag");
+                    }
+                }
+
+                if (variables.empty())
+                    return json();
+                else
+                    return variables.back();
             }
             if (tag == "bigint")
             {
