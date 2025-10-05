@@ -1,4 +1,5 @@
 #include "capnwebcpp/rpc_session.h"
+#include "capnwebcpp/protocol.h"
 
 #include <iostream>
 #include <sstream>
@@ -20,42 +21,38 @@ void RpcSession::onClose(RpcSessionData*)
 
 std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::string& message)
 {
-    try
+    protocol::Message m;
+    if (!protocol::parse(message, m))
+        return "";
+
+    switch (m.type)
     {
-        auto msg = json::parse(message);
-
-        if (!msg.is_array() || msg.empty())
-            return "";
-
-        std::string messageType = msg[0];
-
-        if (messageType == "push")
+        case protocol::MessageType::Push:
         {
-            handlePush(sessionData, msg[1]);
+            if (m.params.size() >= 1)
+                handlePush(sessionData, m.params[0]);
             return "";
         }
-        else if (messageType == "pull")
+        case protocol::MessageType::Pull:
         {
-            if (msg.size() >= 2 && msg[1].is_number())
-                return handlePull(sessionData, msg[1]).dump();
-        }
-        else if (messageType == "release")
-        {
-            if (msg.size() >= 3 && msg[1].is_number() && msg[2].is_number())
-            {
-                handleRelease(sessionData, msg[1], msg[2]);
-                return "";
-            }
-        }
-        else if (messageType == "abort")
-        {
-            handleAbort(sessionData, msg[1]);
+            if (m.params.size() >= 1 && m.params[0].is_number())
+                return handlePull(sessionData, m.params[0]).dump();
             return "";
         }
-    }
-    catch (const json::exception& e)
-    {
-        std::cerr << "JSON parsing error: " << e.what() << std::endl;
+        case protocol::MessageType::Release:
+        {
+            if (m.params.size() >= 2 && m.params[0].is_number() && m.params[1].is_number())
+                handleRelease(sessionData, m.params[0], m.params[1]);
+            return "";
+        }
+        case protocol::MessageType::Abort:
+        {
+            if (m.params.size() >= 1)
+                handleAbort(sessionData, m.params[0]);
+            return "";
+        }
+        default:
+            return "";
     }
 
     return "";
