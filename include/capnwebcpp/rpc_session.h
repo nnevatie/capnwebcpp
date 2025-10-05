@@ -14,12 +14,24 @@ namespace capnwebcpp
 
 using json = nlohmann::json;
 
+// Export table entry, tracks either a pending operation or a computed result,
+// along with the remote refcount for release semantics.
+struct ExportEntry
+{
+    int refcount = 1;                 // Remote-held references
+    bool hasResult = false;
+    json result;                      // Valid if hasResult
+
+    bool hasOperation = false;
+    std::string method;               // Valid if hasOperation
+    json args;                        // Valid if hasOperation
+};
+
 // Internal data associated with each connection/session.
 struct RpcSessionData
 {
-    std::unordered_map<int, json> pendingResults;
-    std::unordered_map<int, json> pendingOperations;
-    int nextExportId = 1;
+    std::unordered_map<int, ExportEntry> exports; // exportId -> entry
+    int nextExportId = 1;                         // Server-chosen export IDs (simplified)
     std::shared_ptr<RpcTarget> target;
 };
 
