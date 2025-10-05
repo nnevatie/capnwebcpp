@@ -13,6 +13,8 @@ void RpcSession::onOpen(RpcSessionData* sessionData)
     std::cout << "WebSocket connection opened" << std::endl;
     sessionData->nextExportId = 1;
     sessionData->exports.clear();
+    pullCount = 0;
+    aborted = false;
 }
 
 void RpcSession::onClose(RpcSessionData*)
@@ -22,6 +24,8 @@ void RpcSession::onClose(RpcSessionData*)
 
 std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::string& message)
 {
+    if (aborted)
+        return "";
     protocol::Message m;
     if (!protocol::parse(message, m))
         return "";
@@ -38,7 +42,9 @@ std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::st
         {
             if (m.params.size() >= 1 && m.params[0].is_number())
             {
+                ++pullCount;
                 auto out = handlePull(sessionData, m.params[0]);
+                if (pullCount > 0) --pullCount;
                 return protocol::serialize(out);
             }
             return "";
@@ -291,6 +297,12 @@ void RpcSession::handleRelease(RpcSessionData* sessionData, int exportId, int re
 void RpcSession::handleAbort(RpcSessionData*, const json& errorData)
 {
     std::cerr << "Abort received: " << errorData.dump() << std::endl;
+    aborted = true;
+    std::string reason = errorData.is_string() ? errorData.get<std::string>() : errorData.dump();
+    for (auto& cb : onBrokenCallbacks)
+    {
+        try { cb(reason); } catch (...) {}
+    }
 }
 
 } // namespace capnwebcpp

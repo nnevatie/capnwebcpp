@@ -64,8 +64,20 @@ public:
     void onOpen(RpcSessionData* sessionData);
     void onClose(RpcSessionData* sessionData);
 
+    // Lifecycle: return true if there are no outstanding pulls to resolve.
+    bool isDrained() const { return pullCount == 0; }
+    bool isAborted() const { return aborted; }
+
+    // Internal onBroken registration (reserved for future use).
+    void registerOnBroken(std::function<void(const std::string&)> cb) { onBrokenCallbacks.push_back(std::move(cb)); }
+
 private:
     std::shared_ptr<RpcTarget> target;
+
+    // Lifecycle state
+    int pullCount = 0;
+    bool aborted = false;
+    std::vector<std::function<void(const std::string&)>> onBrokenCallbacks;
 
     void handlePush(RpcSessionData* sessionData, const json& pushData);
     protocol::Message handlePull(RpcSessionData* sessionData, int exportId);

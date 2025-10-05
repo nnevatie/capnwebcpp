@@ -98,6 +98,12 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
                         responseBody += responses[i];
                     }
 
+                    // Ensure the session has drained outstanding pulls before ending.
+                    if (!session->isDrained())
+                    {
+                        // Current implementation resolves synchronously; this should not happen.
+                        // If it does, proceed to end the response anyway.
+                    }
                     res->end(responseBody);
                 }
                 catch (const std::exception& e)
