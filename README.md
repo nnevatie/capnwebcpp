@@ -15,11 +15,13 @@ Early prototype of a server-side subset of the Cap'n Web protocol. The library c
 | push/pull/resolve/reject | ✅ | Basic semantics wired end-to-end |
 | Pipelining (property paths) | ⚠️ | Limited support via lazy evaluation |
 | Examples interop | ✅ | Helloworld and batch-pipelining with JS clients |
+| Protocol message framing (parse/serialize) | ✅ | MessageType + parser/serializer wired into session |
+| Basic serialization helpers | ✅ | Array escape + error tuples; used for resolve/reject |
 | Import/export tables + refcounts (neg ID policy) | ❌ | Uses simplified pending maps currently |
 | Release semantics | ❌ | `release` is logged only |
-| Transport abstraction | ❌ | Tied to uWebSockets; no Workers/MessagePort |
+| Transport abstraction | ⚠️ | Interface + uWS/batch adapters; no Workers/MessagePort yet |
 | Client stubs/promises in C++ | ❌ | Server-only library |
-| Advanced serialization (bigint/date/bytes/undefined) | ❌ | Plain JSON with array-escape for arrays only |
+| Advanced serialization (bigint/date/bytes/undefined) | ❌ | Special types not supported; basic wrappers present |
 | Error redaction hooks | ❌ | No `onSendError` equivalent |
 | Abort/onBroken callbacks | ❌ | Basic logging only |
 | `drain()` and stats | ❌ | No coordination APIs yet |
