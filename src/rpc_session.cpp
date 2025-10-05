@@ -1,5 +1,6 @@
 #include "capnwebcpp/rpc_session.h"
 #include "capnwebcpp/protocol.h"
+#include "capnwebcpp/serialize.h"
 
 #include <iostream>
 #include <sstream>
@@ -175,20 +176,9 @@ json RpcSession::handlePull(RpcSessionData* sessionData, int exportId)
     if (sessionData->pendingResults.find(exportId) != sessionData->pendingResults.end())
     {
         json& result = sessionData->pendingResults[exportId];
-        json response;
-
-        if (result.is_array() && result.size() >= 2 && result[0] == "error")
-        {
-            response = json::array({"reject", exportId, result});
-        }
-        else
-        {
-            if (result.is_array())
-                response = json::array({"resolve", exportId, json::array({result})});
-            else
-                response = json::array({"resolve", exportId, result});
-        }
-
+        json response = (result.is_array() && result.size() >= 2 && result[0] == "error")
+            ? serialize::rejectFrame(exportId, result)
+            : serialize::resolveFrame(exportId, result);
         sessionData->pendingResults.erase(exportId);
         return response;
     }
@@ -207,28 +197,20 @@ json RpcSession::handlePull(RpcSessionData* sessionData, int exportId)
             sessionData->pendingResults[exportId] = result;
             sessionData->pendingOperations.erase(exportId);
 
-            json response;
-            if (result.is_array())
-                response = json::array({"resolve", exportId, json::array({result})});
-            else
-                response = json::array({"resolve", exportId, result});
-
-            return response;
+            return serialize::resolveFrame(exportId, result);
         }
         catch (const std::exception& e)
         {
             sessionData->pendingOperations.erase(exportId);
 
-            json error = json::array({"error", "MethodError", std::string(e.what())});
-            json response = json::array({"reject", exportId, error});
-            return response;
+            json error = serialize::makeError("MethodError", std::string(e.what()));
+            return serialize::rejectFrame(exportId, error);
         }
     }
     else
     {
-        return json::array({"reject", exportId, json::array({
-            "error", "ExportNotFound", "Export ID not found"
-        })});
+        return serialize::rejectFrame(exportId,
+            serialize::makeError("ExportNotFound", "Export ID not found"));
     }
 }
 
