@@ -5,6 +5,7 @@
 
 #include <capnwebcpp/protocol.h>
 #include <capnwebcpp/serialize.h>
+#include <capnwebcpp/rpc_session.h>
 
 using json = nlohmann::json;
 
@@ -89,6 +90,15 @@ int main()
     int failed = 0;
     failed += !testProtocolParseSerialize();
     failed += !testSerializeHelpers();
+    // Test import release on resolve/reject
+    {
+        capnwebcpp::RpcSession session(nullptr);
+        capnwebcpp::RpcSessionData data; // empty imports; handler will create entry
+        std::string out = session.handleMessage(&data, std::string("[\"resolve\",7,\"ok\"]"));
+        failed += !(json::parse(out) == json::parse("[\"release\",7,1]"));
+        out = session.handleMessage(&data, std::string("[\"reject\",8,[\"error\",\"X\",\"Y\"]]"));
+        failed += !(json::parse(out) == json::parse("[\"release\",8,1]"));
+    }
     if (failed == 0)
     {
         std::cout << "All protocol/serialize tests passed" << std::endl;
@@ -97,4 +107,3 @@ int main()
     std::cerr << failed << " protocol/serialize test(s) failed" << std::endl;
     return 1;
 }
-

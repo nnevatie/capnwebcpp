@@ -27,6 +27,69 @@ json rejectFrame(int exportId, const json& errorTuple)
     return json::array({ "reject", exportId, errorTuple });
 }
 
+bool isSpecialArray(const json& value)
+{
+    if (!value.is_array() || value.empty() || !value[0].is_string())
+        return false;
+    const std::string tag = value[0];
+    return tag == "export" || tag == "promise" || tag == "error" || tag == "bigint" ||
+           tag == "date" || tag == "bytes" || tag == "undefined" || tag == "import" ||
+           tag == "pipeline" || tag == "remap";
+}
+
+static json devaluateObjectForResult(const json& value, const std::function<int()>& newExportId);
+
+static json devaluateArrayForResult(const json& arr, const std::function<int()>& newExportId)
+{
+    json out = json::array();
+    for (const auto& el : arr)
+    {
+        if (el.is_object()) out.push_back(devaluateObjectForResult(el, newExportId));
+        else if (el.is_array()) out.push_back(devaluateArrayForResult(el, newExportId));
+        else out.push_back(el);
+    }
+    return out;
+}
+
+static json devaluateObjectForResult(const json& obj, const std::function<int()>& newExportId)
+{
+    // Special sentinel objects to request export/promise emission.
+    if (obj.is_object())
+    {
+        auto itExp = obj.find("$export");
+        if (itExp != obj.end() && itExp->is_boolean() && *itExp)
+        {
+            int id = newExportId();
+            return json::array({ "export", id });
+        }
+        auto itProm = obj.find("$promise");
+        if (itProm != obj.end() && itProm->is_boolean() && *itProm)
+        {
+            int id = newExportId();
+            return json::array({ "promise", id });
+        }
+    }
+
+    // Otherwise, recursively devaluate fields.
+    json out = json::object();
+    for (auto& [k, v] : obj.items())
+    {
+        if (v.is_object()) out[k] = devaluateObjectForResult(v, newExportId);
+        else if (v.is_array()) out[k] = devaluateArrayForResult(v, newExportId);
+        else out[k] = v;
+    }
+    return out;
+}
+
+json devaluateForResult(const json& value, const std::function<int()>& newExportId)
+{
+    if (value.is_object())
+        return devaluateObjectForResult(value, newExportId);
+    if (value.is_array())
+        return devaluateArrayForResult(value, newExportId);
+    return value;
+}
+
 static json traversePath(json result, const json& path)
 {
     if (!path.is_array())

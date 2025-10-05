@@ -49,6 +49,19 @@ public:
                               const Cacher& cache);
 };
 
+// --------------------------------------------------------------------------------------
+// Devaluation of server results to protocol expressions
+
+// Returns true if the array represents a special protocol expression which should not be
+// wrapped (e.g. ["export", id] or ["promise", id]).
+bool isSpecialArray(const json& value);
+
+// Devaluate a plain JSON result into protocol expressions for exports/promises.
+// Recognizes objects like {"$export": true} and {"$promise": true} and converts them to
+// ["export", id] and ["promise", id], respectively, using the provided allocator to obtain
+// negative export IDs.
+json devaluateForResult(const json& value, const std::function<int()>& newExportId);
+
 } // namespace serialize
 
 } // namespace capnwebcpp

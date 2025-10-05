@@ -44,26 +44,23 @@ std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::st
             return "";
         }
         case protocol::MessageType::Resolve:
-        {
-            // ["resolve", importId, value]
-            if (m.params.size() >= 2 && m.params[0].is_number())
-            {
-                int importId = m.params[0];
-                auto& imp = sessionData->imports[importId];
-                imp.hasResolution = true;
-                imp.resolution = m.params[1];
-            }
-            return "";
-        }
         case protocol::MessageType::Reject:
         {
-            // ["reject", importId, error]
+            // [type, importId, valueOrError]
             if (m.params.size() >= 2 && m.params[0].is_number())
             {
                 int importId = m.params[0];
                 auto& imp = sessionData->imports[importId];
                 imp.hasResolution = true;
                 imp.resolution = m.params[1];
+
+                // Parity: after import resolves/rejects, send release for remote refs.
+                protocol::Message rel;
+                rel.type = protocol::MessageType::Release;
+                rel.params = json::array({ importId, 1 });
+                // Clean up local import entry.
+                sessionData->imports.erase(importId);
+                return protocol::serialize(rel);
             }
             return "";
         }
@@ -171,7 +168,17 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
         else
         {
             msg.type = protocol::MessageType::Resolve;
-            msg.params = json::array({ exportId, serialize::wrapArrayIfNeeded(result) });
+            // Devaluate result for exports/promises; then wrap arrays unless special expression.
+            json deval = serialize::devaluateForResult(result, [this, sessionData]() {
+                int id = allocateNegativeExportId(sessionData);
+                ExportEntry e; e.refcount = 1; e.hasResult = false; e.hasOperation = false;
+                sessionData->exports[id] = e;
+                return id;
+            });
+            if (deval.is_array() && serialize::isSpecialArray(deval))
+                msg.params = json::array({ exportId, deval });
+            else
+                msg.params = json::array({ exportId, serialize::wrapArrayIfNeeded(deval) });
         }
         // Clear result after sending; keep entry for refcount tracking if needed.
         itExp->second.hasResult = false;
@@ -196,7 +203,16 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
 
             protocol::Message msg;
             msg.type = protocol::MessageType::Resolve;
-            msg.params = json::array({ exportId, serialize::wrapArrayIfNeeded(result) });
+            json deval = serialize::devaluateForResult(result, [this, sessionData]() {
+                int id = allocateNegativeExportId(sessionData);
+                ExportEntry e; e.refcount = 1; e.hasResult = false; e.hasOperation = false;
+                sessionData->exports[id] = e;
+                return id;
+            });
+            if (deval.is_array() && serialize::isSpecialArray(deval))
+                msg.params = json::array({ exportId, deval });
+            else
+                msg.params = json::array({ exportId, serialize::wrapArrayIfNeeded(deval) });
             return msg;
         }
         catch (const std::exception& e)

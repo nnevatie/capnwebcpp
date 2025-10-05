@@ -46,6 +46,12 @@ struct TestTarget : public RpcTarget
                 {"bio", "ok"}
             };
         });
+
+        // getExportStub() -> special object that devaluator will turn into ["export", -1]
+        method("getExportStub", [](const json&)
+        {
+            return json{ {"$export", true} };
+        });
     }
 };
 
@@ -154,12 +160,39 @@ static bool testReleaseThenPull()
     return ok;
 }
 
+static bool testNegativeExportEmission()
+{
+    auto target = std::make_shared<TestTarget>();
+    RpcSession session(target);
+    RpcSessionData data;
+    data.target = target;
+
+    // push: getExportStub()
+    json push = json::array({
+        "push",
+        json::array({ "pipeline", 0, json::array({"getExportStub"}) })
+    });
+    session.handleMessage(&data, push.dump());
+
+    // pull export 1
+    std::string res = session.handleMessage(&data, json::array({"pull", 1}).dump());
+    json msg = parse(res);
+    bool ok = true;
+    ok &= require(msg[0] == "resolve", "negative export: resolve");
+    ok &= require(msg[1] == 1, "negative export: export id 1");
+    ok &= require(msg[2].is_array() && msg[2].size() == 2 && msg[2][0] == "export" && msg[2][1].is_number_integer(),
+                 "negative export: payload is [export, id]");
+    ok &= require(msg[2][1] < 0, "negative export: id is negative");
+    return ok;
+}
+
 int main()
 {
     int failed = 0;
     failed += !testSimpleCall();
     failed += !testPipelineArgResolution();
     failed += !testReleaseThenPull();
+    failed += !testNegativeExportEmission();
 
     if (failed == 0)
     {
