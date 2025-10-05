@@ -191,9 +191,20 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
                 e.result = result;
                 e.hasOperation = false;
             };
+            auto callExport = [this, sessionData](int exportId, const json& path, const json& args) -> json
+            {
+                std::shared_ptr<RpcTarget> ct = sessionData->target;
+                auto it = sessionData->exports.find(exportId);
+                if (it != sessionData->exports.end() && it->second.callTarget)
+                    ct = it->second.callTarget;
+                if (!path.is_array() || path.empty() || !path[0].is_string())
+                    throw std::runtime_error("invalid export call path");
+                std::string method = path[0].get<std::string>();
+                return ct->dispatch(method, args);
+            };
 
             entry.hasResult = true;
-            entry.result = serialize::Evaluator::evaluateValue(pushData, getResult, getOperation, dispatch, cache);
+            entry.result = serialize::Evaluator::evaluateValueWithCaller(pushData, getResult, getOperation, dispatch, cache, callExport);
         }
         catch (const std::exception& e)
         {

@@ -5,6 +5,7 @@ namespace capnwebcpp
 namespace serialize
 {
 
+
 json wrapArrayIfNeeded(const json& value)
 {
     if (value.is_array())
@@ -233,8 +234,7 @@ json Evaluator::evaluateValue(const json& value,
                         json resultVal;
                         if (subjectIdx < 0)
                         {
-                            // Call method on captured stub; for now, dispatch to main target.
-                            // Resolve args recursively.
+                            // Default evaluator: fallback to dispatch on first method segment.
                             json resolvedArgs = hasArgs ? evaluateValue(args, getResult, getOperation, dispatch, cache) : json::array();
                             if (!path.is_array() || path.empty() || !path[0].is_string())
                                 throw std::runtime_error("remap pipeline invalid method path");
@@ -433,6 +433,247 @@ json Evaluator::evaluateValue(const json& value,
     {
         return value;
     }
+}
+
+json Evaluator::evaluateValueWithCaller(const json& value,
+                              const ResultGetter& getResult,
+                              const OperationGetter& getOperation,
+                              const Dispatcher& dispatch,
+                              const Cacher& cache,
+                              const ExportCaller& callExport)
+{
+    // Local recursive evaluator that routes captured pipelines via callExport.
+    std::function<json(const json&)> eval = [&](const json& v) -> json
+    {
+        if (v.is_array())
+        {
+            if (v.size() >= 1 && v[0].is_string())
+            {
+                const std::string tag = v[0];
+                if (tag == "remap")
+                {
+                    if (v.size() != 5 || !v[1].is_number() || !v[2].is_array() ||
+                        !v[3].is_array() || !v[4].is_array())
+                        throw std::runtime_error("invalid remap expression");
+
+                    int baseExportId = v[1];
+                    const json& basePath = v[2];
+                    const json& captures = v[3];
+                    const json& instructions = v[4];
+
+                    std::vector<int> captureIds;
+                    for (const auto& cap : captures)
+                    {
+                        if (!cap.is_array() || cap.size() != 2 || !cap[0].is_string() || !cap[1].is_number())
+                            throw std::runtime_error("invalid remap capture");
+                        std::string capTag = cap[0];
+                        int id = cap[1];
+                        if (capTag != "import" && capTag != "export")
+                            throw std::runtime_error("unknown remap capture tag");
+                        captureIds.push_back(id);
+                    }
+
+                    json input;
+                    try {
+                        input = eval(json::array({"pipeline", baseExportId, basePath}));
+                    } catch (...) { input = json(); }
+
+                    std::vector<json> variables;
+                    variables.push_back(input);
+
+                    auto applyPathGet = [](json subject, const json& path) -> json
+                    {
+                        if (!path.is_array()) return subject;
+                        for (const auto& key : path)
+                        {
+                            if (key.is_string() && subject.is_object())
+                                subject = subject[key.get<std::string>()];
+                            else if (key.is_number() && subject.is_array())
+                                subject = subject[key.get<int>()];
+                        }
+                        return subject;
+                    };
+
+                    for (const auto& instr : instructions)
+                    {
+                        if (!instr.is_array() || instr.empty() || !instr[0].is_string())
+                            throw std::runtime_error("invalid remap instruction");
+                        std::string itag = instr[0];
+                        if (itag == "pipeline")
+                        {
+                            if (instr.size() < 3 || !instr[1].is_number() || !instr[2].is_array())
+                                throw std::runtime_error("invalid pipeline instruction");
+                            int subjectIdx = instr[1];
+                            const json& path = instr[2];
+                            bool hasArgs = instr.size() >= 4;
+                            json args = hasArgs ? instr[3] : json::array();
+
+                            json resultVal;
+                            if (subjectIdx < 0)
+                            {
+                                json resolvedArgs = hasArgs ? eval(args) : json::array();
+                                int capIndex = -subjectIdx - 1;
+                                if (capIndex < 0 || capIndex >= (int)captureIds.size())
+                                    throw std::runtime_error("remap capture index out of range");
+                                int expId = captureIds[capIndex];
+                                resultVal = callExport(expId, path, resolvedArgs);
+                            }
+                            else
+                            {
+                                if (subjectIdx >= (int)variables.size())
+                                    throw std::runtime_error("remap variable index out of range");
+                                json subj = variables[subjectIdx];
+                                resultVal = applyPathGet(subj, path);
+                            }
+                            variables.push_back(resultVal);
+                        }
+                        else if (itag == "value")
+                        {
+                            if (instr.size() != 2)
+                                throw std::runtime_error("invalid value instruction");
+                            variables.push_back(eval(instr[1]));
+                        }
+                        else if (itag == "get")
+                        {
+                            if (instr.size() != 3 || !instr[1].is_number() || !instr[2].is_array())
+                                throw std::runtime_error("invalid get instruction");
+                            int subjectIdx = instr[1];
+                            const json& path = instr[2];
+                            json resultVal;
+                            if (subjectIdx < 0)
+                            {
+                                int capIndex = -subjectIdx - 1;
+                                if (capIndex < 0 || capIndex >= (int)captureIds.size())
+                                    throw std::runtime_error("remap capture index out of range");
+                                int expId = captureIds[capIndex];
+                                resultVal = eval(json::array({"pipeline", expId, path}));
+                            }
+                            else
+                            {
+                                if (subjectIdx >= (int)variables.size())
+                                    throw std::runtime_error("remap variable index out of range");
+                                resultVal = applyPathGet(variables[subjectIdx], path);
+                            }
+                            variables.push_back(resultVal);
+                        }
+                        else if (itag == "array")
+                        {
+                            if (instr.size() != 2 || !instr[1].is_array())
+                                throw std::runtime_error("invalid array instruction");
+                            json out = json::array();
+                            for (const auto& elem : instr[1])
+                            {
+                                if (elem.is_array() && elem.size() == 2 && elem[0].is_string() && elem[0] == "value")
+                                    out.push_back(eval(elem[1]));
+                                else
+                                    out.push_back(eval(elem));
+                            }
+                            variables.push_back(out);
+                        }
+                        else if (itag == "object")
+                        {
+                            if (instr.size() != 2 || !instr[1].is_array())
+                                throw std::runtime_error("invalid object instruction");
+                            json out = json::object();
+                            for (const auto& kv : instr[1])
+                            {
+                                if (!kv.is_array() || kv.size() != 2 || !kv[0].is_string())
+                                    throw std::runtime_error("invalid object entry");
+                                std::string key = kv[0].get<std::string>();
+                                const auto& vexpr = kv[1];
+                                if (vexpr.is_array() && vexpr.size() == 2 && vexpr[0].is_string() && vexpr[0] == "value")
+                                    out[key] = eval(vexpr[1]);
+                                else
+                                    out[key] = eval(vexpr);
+                            }
+                            variables.push_back(out);
+                        }
+                        else if (itag == "remap")
+                        {
+                            variables.push_back(eval(instr));
+                        }
+                        else
+                        {
+                            throw std::runtime_error("unsupported remap instruction tag");
+                        }
+                    }
+
+                    if (variables.empty())
+                        return json();
+                    else
+                        return variables.back();
+                }
+                else if (tag == "value")
+                {
+                    if (v.size() != 2) throw std::runtime_error("invalid value expression");
+                    return eval(v[1]);
+                }
+                else if (tag == "bigint")
+                {
+                    if (v.size() >= 2 && v[1].is_string()) return json{{"$bigint", v[1]}};
+                }
+                else if (tag == "date")
+                {
+                    if (v.size() >= 2 && (v[1].is_number() || v[1].is_number_integer())) return json{{"$date", v[1]}};
+                }
+                else if (tag == "bytes")
+                {
+                    if (v.size() >= 2 && v[1].is_string()) return json{{"$bytes", v[1]}};
+                }
+                else if (tag == "undefined")
+                {
+                    return json{{"$undefined", true}};
+                }
+                else if (tag == "error")
+                {
+                    if (v.size() >= 3 && v[1].is_string() && v[2].is_string())
+                    {
+                        json e = json{{"name", v[1].get<std::string>()}, {"message", v[2].get<std::string>()}};
+                        if (v.size() >= 4 && v[3].is_string()) e["stack"] = v[3].get<std::string>();
+                        return json{{"$error", e}};
+                    }
+                }
+            }
+            if (v.size() >= 2 && v[0].is_string() && v[0] == "pipeline" && v[1].is_number())
+            {
+                int exportId = v[1];
+                json res;
+                if (getResult(exportId, res))
+                {
+                    if (v.size() >= 3) res = traversePath(res, v[2]);
+                    return res;
+                }
+                else
+                {
+                    std::string method; json args;
+                    if (!getOperation(exportId, method, args)) throw std::runtime_error("Pipeline reference to non-existent export: " + std::to_string(exportId));
+                    json resolvedArgs = eval(args);
+                    json computed = dispatch(method, resolvedArgs);
+                    cache(exportId, computed);
+                    if (v.size() >= 3) computed = traversePath(computed, v[2]);
+                    return computed;
+                }
+            }
+            else
+            {
+                json out = json::array();
+                for (const auto& e : v) out.push_back(eval(e));
+                return out;
+            }
+        }
+        else if (v.is_object())
+        {
+            json out = json::object();
+            for (auto& [k, vv] : v.items()) out[k] = eval(vv);
+            return out;
+        }
+        else
+        {
+            return v;
+        }
+    };
+
+    return eval(value);
 }
 
 } // namespace serialize
