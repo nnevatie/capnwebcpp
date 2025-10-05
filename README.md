@@ -1,4 +1,5 @@
 # capnwebcpp
+[![CI](https://github.com/nnevatie/capnwebcpp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nnevatie/capnwebcpp/actions/workflows/ci.yml)
 [Cap'n Web](https://github.com/cloudflare/capnweb) C++ Server Library. This small library allows the user to create server implementations for the Cap'n Web RPC protocol, in delightful C++.
 
 The library does not offer many conveniences - it only supplies the minimal plumbing required for getting messages flying between the RPC client and server.
