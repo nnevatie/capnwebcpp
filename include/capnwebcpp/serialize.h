@@ -39,6 +39,7 @@ public:
     using OperationGetter = std::function<bool(int /*exportId*/, std::string& /*method*/, json& /*args*/)>;
     using Dispatcher = std::function<json(const std::string& /*method*/, const json& /*args*/)>;
     using Cacher = std::function<void(int /*exportId*/, const json& /*result*/)>;
+    using ExportCaller = std::function<json(int /*exportId*/, const json& /*path*/, const json& /*args*/)>;
 
     // Evaluate a value tree, resolving any ["pipeline", exportId, path?] references by using
     // callbacks to fetch or compute results, then traversing property paths.
@@ -47,6 +48,13 @@ public:
                               const OperationGetter& getOperation,
                               const Dispatcher& dispatch,
                               const Cacher& cache);
+
+    static json evaluateValueWithCaller(const json& value,
+                              const ResultGetter& getResult,
+                              const OperationGetter& getOperation,
+                              const Dispatcher& dispatch,
+                              const Cacher& cache,
+                              const ExportCaller& callExport);
 };
 
 // --------------------------------------------------------------------------------------

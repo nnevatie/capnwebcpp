@@ -291,7 +291,14 @@ json Evaluator::evaluateValue(const json& value,
                         json out = json::array();
                         for (const auto& elem : instr[1])
                         {
-                            out.push_back(evaluateValue(elem, getResult, getOperation, dispatch, cache));
+                            if (elem.is_array() && elem.size() == 2 && elem[0].is_string() && elem[0] == "value")
+                            {
+                                out.push_back(evaluateValue(elem[1], getResult, getOperation, dispatch, cache));
+                            }
+                            else
+                            {
+                                out.push_back(evaluateValue(elem, getResult, getOperation, dispatch, cache));
+                            }
                         }
                         variables.push_back(out);
                     }
@@ -305,7 +312,11 @@ json Evaluator::evaluateValue(const json& value,
                             if (!kv.is_array() || kv.size() != 2 || !kv[0].is_string())
                                 throw std::runtime_error("invalid object entry");
                             std::string key = kv[0].get<std::string>();
-                            out[key] = evaluateValue(kv[1], getResult, getOperation, dispatch, cache);
+                            const auto& vexpr = kv[1];
+                            if (vexpr.is_array() && vexpr.size() == 2 && vexpr[0].is_string() && vexpr[0] == "value")
+                                out[key] = evaluateValue(vexpr[1], getResult, getOperation, dispatch, cache);
+                            else
+                                out[key] = evaluateValue(vexpr, getResult, getOperation, dispatch, cache);
                         }
                         variables.push_back(out);
                     }
