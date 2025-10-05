@@ -57,7 +57,8 @@ std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::st
                 // Parity: after import resolves/rejects, send release for remote refs.
                 protocol::Message rel;
                 rel.type = protocol::MessageType::Release;
-                rel.params = json::array({ importId, 1 });
+                int releaseCount = imp.remoteRefcount > 0 ? imp.remoteRefcount : 1;
+                rel.params = json::array({ importId, releaseCount });
                 // Clean up local import entry.
                 sessionData->imports.erase(importId);
                 return protocol::serialize(rel);
@@ -109,7 +110,7 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
             }
 
             ExportEntry entry;
-            entry.refcount = 1;
+            entry.remoteRefcount = 1;
             entry.hasOperation = true;
             entry.method = method;
             entry.args = argsArray;
@@ -180,7 +181,7 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
             // Devaluate result for exports/promises; then wrap arrays unless special expression.
             json deval = serialize::devaluateForResult(result, [this, sessionData](bool isPromise, const json& payload) {
                 int id = allocateNegativeExportId(sessionData);
-                ExportEntry e; e.refcount = 1; e.hasOperation = false;
+                ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false;
                 if (isPromise)
                 {
                     e.hasResult = true;
@@ -225,7 +226,7 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
             msg.type = protocol::MessageType::Resolve;
             json deval = serialize::devaluateForResult(result, [this, sessionData](bool isPromise, const json& payload) {
                 int id = allocateNegativeExportId(sessionData);
-                ExportEntry e; e.refcount = 1; e.hasOperation = false;
+                ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false;
                 if (isPromise)
                 {
                     e.hasResult = true;
@@ -278,10 +279,10 @@ void RpcSession::handleRelease(RpcSessionData* sessionData, int exportId, int re
     // Decrement remote refcount and clean up on zero.
     if (refcount > 0)
     {
-        it->second.refcount -= refcount;
+        it->second.remoteRefcount -= refcount;
     }
 
-    if (it->second.refcount <= 0)
+    if (it->second.remoteRefcount <= 0)
     {
         sessionData->exports.erase(it);
     }

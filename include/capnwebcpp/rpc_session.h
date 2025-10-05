@@ -18,7 +18,8 @@ using json = nlohmann::json;
 // along with the remote refcount for release semantics.
 struct ExportEntry
 {
-    int refcount = 1;                 // Remote-held references
+    int remoteRefcount = 1;           // Remote-held references to this export
+    int localRefcount = 1;            // Local references (future use)
     bool hasResult = false;
     json result;                      // Valid if hasResult
 
@@ -34,6 +35,7 @@ struct ExportEntry
 struct ImportEntry
 {
     int localRefcount = 1;            // Our local references
+    int remoteRefcount = 1;           // Remote-held references (peer believes we hold)
     bool hasResolution = false;       // True if resolve/reject received
     json resolution;                  // Resolved value or error tuple
 };
