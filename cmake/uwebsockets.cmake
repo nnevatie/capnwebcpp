@@ -173,9 +173,16 @@ if(DEFINED uWebSockets_SOURCE_DIR AND NOT uWebSockets_SOURCE_DIR STREQUAL "")
   set(_UWS_SRC "${uWebSockets_SOURCE_DIR}")
 endif()
 
-# Check for headers location
+# Check for headers location (support both legacy and namespaced layouts)
 set(_UWS_INCLUDE_DIR "")
-foreach(dir "${_UWS_SRC}/src" "${_UWS_SRC}" "${_UWS_SRC}/include")
+set(_UWS_CANDIDATE_DIRS
+    "${_UWS_SRC}/src"
+    "${_UWS_SRC}"
+    "${_UWS_SRC}/include"
+    "${_UWS_SRC}/src/uwebsockets"
+    "${_UWS_SRC}/uwebsockets"
+)
+foreach(dir ${_UWS_CANDIDATE_DIRS})
   if(EXISTS "${dir}/App.h")
     set(_UWS_INCLUDE_DIR "${dir}")
     break()
@@ -183,7 +190,7 @@ foreach(dir "${_UWS_SRC}/src" "${_UWS_SRC}" "${_UWS_SRC}/include")
 endforeach()
 
 if(_UWS_INCLUDE_DIR STREQUAL "")
-  message(FATAL_ERROR "uWebSockets headers not found. Check UWS_GIT_TAG=${UWS_GIT_TAG}")
+  message(FATAL_ERROR "uWebSockets headers not found. Check UWS_GIT_TAG=${UWS_GIT_TAG} and repository layout.")
 endif()
 
 # Create interface target
