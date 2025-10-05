@@ -122,21 +122,28 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
             entry.args = argsArray;
             entry.callTarget = callTarget;
 
-            // Eagerly evaluate the operation and store the result; transmission still waits for pull.
-            try
+            // Defer evaluation to microtask queue; transmit still waits for pull.
+            int queuedExportId = exportId;
+            json queuedArgs = argsArray;
+            enqueueTask([this, sessionData, queuedExportId, method, queuedArgs, callTarget]() mutable
             {
-                json resolvedArgs = resolvePipelineReferences(sessionData, argsArray);
-                json result = callTarget->dispatch(method, resolvedArgs);
-                entry.hasOperation = false;
-                entry.hasResult = true;
-                entry.result = result;
-            }
-            catch (const std::exception& e)
-            {
-                entry.hasOperation = false;
-                entry.hasResult = true;
-                entry.result = serialize::makeError("MethodError", std::string(e.what()));
-            }
+                auto it = sessionData->exports.find(queuedExportId);
+                if (it == sessionData->exports.end()) return;
+                try
+                {
+                    json resolvedArgs = resolvePipelineReferences(sessionData, queuedArgs);
+                    json result = callTarget->dispatch(method, resolvedArgs);
+                    it->second.hasOperation = false;
+                    it->second.hasResult = true;
+                    it->second.result = result;
+                }
+                catch (const std::exception& e)
+                {
+                    it->second.hasOperation = false;
+                    it->second.hasResult = true;
+                    it->second.result = serialize::makeError("MethodError", std::string(e.what()));
+                }
+            });
 
             sessionData->exports[exportId] = std::move(entry);
         }
@@ -188,6 +195,8 @@ json RpcSession::resolvePipelineReferences(RpcSessionData* sessionData, const js
 
 protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int exportId)
 {
+    // Before responding, process any queued microtasks so results are ready.
+    processTasks();
     auto itExp = sessionData->exports.find(exportId);
     if (itExp != sessionData->exports.end() && itExp->second.hasResult)
     {

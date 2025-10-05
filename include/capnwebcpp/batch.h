@@ -20,6 +20,8 @@ inline std::vector<std::string> processBatch(RpcSession& session, RpcSessionData
         if (!line.empty())
         {
             std::string response = session.handleMessage(sessionData, line);
+            // After each message, run microtasks (simulate microtask queue).
+            session.processTasks();
             if (!response.empty())
                 responses.push_back(response);
         }
@@ -28,4 +30,3 @@ inline std::vector<std::string> processBatch(RpcSession& session, RpcSessionData
 }
 
 } // namespace capnwebcpp
-

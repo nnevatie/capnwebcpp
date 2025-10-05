@@ -39,6 +39,7 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
             {
                 UwsWebSocketTransport<decltype(ws)> transport(ws);
                 pumpMessage(*session, userData, transport, std::string(message));
+                session->processTasks();
             }
             catch (const std::exception& e)
             {

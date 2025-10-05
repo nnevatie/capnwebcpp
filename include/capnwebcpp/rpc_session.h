@@ -5,6 +5,8 @@
 #include <unordered_map>
 
 #include <nlohmann/json.hpp>
+#include <functional>
+#include <deque>
 
 #include "capnwebcpp/rpc_target.h"
 #include "capnwebcpp/protocol.h"
@@ -67,7 +69,7 @@ public:
     void onClose(RpcSessionData* sessionData);
 
     // Lifecycle: return true if there are no outstanding pulls to resolve.
-    bool isDrained() const { return pullCount == 0; }
+    bool isDrained() const { return pullCount == 0 && pendingMicrotasks == 0; }
     bool isAborted() const { return aborted; }
 
     // Internal onBroken registration (reserved for future use).
@@ -81,6 +83,30 @@ private:
     bool aborted = false;
     std::vector<std::function<void(const std::string&)>> onBrokenCallbacks;
     std::function<json(const json&)> onSendError;
+
+    // Microtask queue for deferred operation resolution (simulated async).
+    std::deque<std::function<void()>> microtasks;
+    int pendingMicrotasks = 0;
+
+public:
+    // Run queued microtasks.
+    void processTasks()
+    {
+        while (!microtasks.empty())
+        {
+            auto fn = std::move(microtasks.front());
+            microtasks.pop_front();
+            try { fn(); } catch (...) {}
+            if (pendingMicrotasks > 0) --pendingMicrotasks;
+        }
+    }
+
+private:
+    void enqueueTask(std::function<void()> fn)
+    {
+        microtasks.emplace_back(std::move(fn));
+        ++pendingMicrotasks;
+    }
 
     void handlePush(RpcSessionData* sessionData, const json& pushData);
     protocol::Message handlePull(RpcSessionData* sessionData, int exportId);
