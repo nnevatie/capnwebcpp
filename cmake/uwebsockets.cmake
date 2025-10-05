@@ -168,9 +168,16 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(uWebSockets)
 
 # Find uWebSockets headers
-set(_UWS_SRC "${CMAKE_BINARY_DIR}/_deps/uWebSockets-src")
+set(_UWS_SRC "")
 if(DEFINED uWebSockets_SOURCE_DIR AND NOT uWebSockets_SOURCE_DIR STREQUAL "")
   set(_UWS_SRC "${uWebSockets_SOURCE_DIR}")
+else()
+  foreach(_cand "${CMAKE_BINARY_DIR}/_deps/uWebSockets-src" "${CMAKE_BINARY_DIR}/_deps/uwebsockets-src")
+    if(EXISTS "${_cand}")
+      set(_UWS_SRC "${_cand}")
+      break()
+    endif()
+  endforeach()
 endif()
 
 # Check for headers location (support both legacy and namespaced layouts)
@@ -190,7 +197,8 @@ foreach(dir ${_UWS_CANDIDATE_DIRS})
 endforeach()
 
 if(_UWS_INCLUDE_DIR STREQUAL "")
-  message(FATAL_ERROR "uWebSockets headers not found. Check UWS_GIT_TAG=${UWS_GIT_TAG} and repository layout.")
+  message(FATAL_ERROR "uWebSockets headers not found. Check UWS_GIT_TAG=${UWS_GIT_TAG} and repository layout."
+                  " _UWS_SRC='${_UWS_SRC}')
 endif()
 
 # Create interface target
