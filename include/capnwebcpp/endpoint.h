@@ -9,6 +9,9 @@
 #include <App.h>
 
 #include "capnwebcpp/rpc_session.h"
+#include "capnwebcpp/transport.h"
+#include "capnwebcpp/transports/uws_websocket_transport.h"
+#include "capnwebcpp/transports/accum_transport.h"
 
 namespace capnwebcpp
 {
@@ -33,9 +36,8 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
             auto* userData = ws->getUserData();
             try
             {
-                std::string response = session->handleMessage(userData, std::string(message));
-                if (!response.empty())
-                    ws->send(response, uWS::TEXT);
+                UwsWebSocketTransport transport(ws);
+                pumpMessage(*session, userData, transport, std::string(message));
             }
             catch (const std::exception& e)
             {
@@ -81,9 +83,8 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
                     {
                         if (!line.empty())
                         {
-                            std::string response = session->handleMessage(&sessionData, line);
-                            if (!response.empty())
-                                responses.push_back(response);
+                            AccumTransport acc(responses);
+                            pumpMessage(*session, &sessionData, acc, line);
                         }
                     }
 
