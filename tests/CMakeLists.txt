@@ -21,3 +21,14 @@ target_link_libraries(capnwebcpp_tests_protocol PRIVATE
 )
 
 add_test(NAME capnwebcpp_tests_protocol COMMAND capnwebcpp_tests_protocol)
+
+add_executable(capnwebcpp_tests_batch
+    test_batch.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_batch PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_batch COMMAND capnwebcpp_tests_batch)

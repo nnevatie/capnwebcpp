@@ -12,6 +12,7 @@
 #include "capnwebcpp/transport.h"
 #include "capnwebcpp/transports/uws_websocket_transport.h"
 #include "capnwebcpp/transports/accum_transport.h"
+#include "capnwebcpp/batch.h"
 
 namespace capnwebcpp
 {
@@ -76,17 +77,7 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
                     sessionData.target = target;
                     sessionData.nextExportId = 1;
 
-                    std::vector<std::string> responses;
-                    std::istringstream stream(body);
-                    std::string line;
-                    while (std::getline(stream, line))
-                    {
-                        if (!line.empty())
-                        {
-                            AccumTransport acc(responses);
-                            pumpMessage(*session, &sessionData, acc, line);
-                        }
-                    }
+                    std::vector<std::string> responses = processBatch(*session, &sessionData, body);
 
                     res->writeHeader("Content-Type", "text/plain");
                     res->writeHeader("Access-Control-Allow-Origin", "*");
@@ -99,11 +90,7 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
                     }
 
                     // Ensure the session has drained outstanding pulls before ending.
-                    if (!session->isDrained())
-                    {
-                        // Current implementation resolves synchronously; this should not happen.
-                        // If it does, proceed to end the response anyway.
-                    }
+                    (void)session->isDrained();
                     res->end(responseBody);
                 }
                 catch (const std::exception& e)
