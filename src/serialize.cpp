@@ -218,12 +218,12 @@ json Evaluator::evaluateValue(const json& value,
 
                 for (const auto& instr : instructions)
                 {
-                    if (!instr.is_array() || instr.size() < 3 || !instr[0].is_string())
+                    if (!instr.is_array() || instr.empty() || !instr[0].is_string())
                         throw std::runtime_error("invalid remap instruction");
-                    std::string itag = instr[0];
+                    std::string itag = instr[0].get<std::string>();
                     if (itag == "pipeline")
                     {
-                        if (!instr[1].is_number() || !instr[2].is_array())
+                        if (instr.size() < 3 || !instr[1].is_number() || !instr[2].is_array())
                             throw std::runtime_error("invalid pipeline instruction");
                         int subjectIdx = instr[1];
                         const json& path = instr[2];
@@ -252,6 +252,63 @@ json Evaluator::evaluateValue(const json& value,
 
                         variables.push_back(resultVal);
                     }
+                    else if (itag == "value")
+                    {
+                        // Push a literal value (evaluate recursively to allow expressions).
+                        if (instr.size() != 2)
+                            throw std::runtime_error("invalid value instruction");
+                        variables.push_back(evaluateValue(instr[1], getResult, getOperation, dispatch, cache));
+                    }
+                    else if (itag == "get")
+                    {
+                        // Read a property path from a subject (local var or capture).
+                        if (instr.size() != 3 || !instr[1].is_number() || !instr[2].is_array())
+                            throw std::runtime_error("invalid get instruction");
+                        int subjectIdx = instr[1];
+                        const json& path = instr[2];
+                        json resultVal;
+                        if (subjectIdx < 0)
+                        {
+                            int capIndex = -subjectIdx - 1;
+                            if (capIndex < 0 || capIndex >= (int)captureIds.size())
+                                throw std::runtime_error("remap capture index out of range");
+                            int expId = captureIds[capIndex];
+                            json expr = json::array({ "pipeline", expId, path });
+                            resultVal = evaluateValue(expr, getResult, getOperation, dispatch, cache);
+                        }
+                        else
+                        {
+                            if (subjectIdx >= (int)variables.size())
+                                throw std::runtime_error("remap variable index out of range");
+                            resultVal = applyPathGet(variables[subjectIdx], path);
+                        }
+                        variables.push_back(resultVal);
+                    }
+                    else if (itag == "array")
+                    {
+                        if (instr.size() != 2 || !instr[1].is_array())
+                            throw std::runtime_error("invalid array instruction");
+                        json out = json::array();
+                        for (const auto& elem : instr[1])
+                        {
+                            out.push_back(evaluateValue(elem, getResult, getOperation, dispatch, cache));
+                        }
+                        variables.push_back(out);
+                    }
+                    else if (itag == "object")
+                    {
+                        if (instr.size() != 2 || !instr[1].is_array())
+                            throw std::runtime_error("invalid object instruction");
+                        json out = json::object();
+                        for (const auto& kv : instr[1])
+                        {
+                            if (!kv.is_array() || kv.size() != 2 || !kv[0].is_string())
+                                throw std::runtime_error("invalid object entry");
+                            std::string key = kv[0].get<std::string>();
+                            out[key] = evaluateValue(kv[1], getResult, getOperation, dispatch, cache);
+                        }
+                        variables.push_back(out);
+                    }
                     else if (itag == "remap")
                     {
                         // Support nested remap by evaluating the full expression.
@@ -268,6 +325,13 @@ json Evaluator::evaluateValue(const json& value,
                     return json();
                 else
                     return variables.back();
+            }
+            else if (tag == "value")
+            {
+                // Expression wrapper: evaluate and return the inner value.
+                if (value.size() != 2)
+                    throw std::runtime_error("invalid value expression");
+                return evaluateValue(value[1], getResult, getOperation, dispatch, cache);
             }
             if (tag == "bigint")
             {

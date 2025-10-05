@@ -1,6 +1,7 @@
 #include "capnwebcpp/rpc_session.h"
 #include "capnwebcpp/protocol.h"
 #include "capnwebcpp/serialize.h"
+#include "capnwebcpp/logging.h"
 
 #include <iostream>
 #include <sstream>
@@ -45,7 +46,9 @@ std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::st
                 ++pullCount;
                 auto out = handlePull(sessionData, m.params[0]);
                 if (pullCount > 0) --pullCount;
-                return protocol::serialize(out);
+                auto s = protocol::serialize(out);
+                debugLog(std::string("pull response: ") + s);
+                return s;
             }
             return "";
         }
@@ -150,14 +153,11 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
     }
     else if (pushData[0] == "remap")
     {
-        // Create export id for remap result and schedule evaluation via Evaluator.
+        // Evaluate remap synchronously for reliability in batch.
         ExportEntry entry;
         entry.remoteRefcount = 1;
-        entry.hasOperation = true;
-        sessionData->exports[exportId] = entry;
-
-        json expr = pushData; // full remap expression
-        enqueueTask([this, sessionData, exportId, expr]() mutable
+        entry.hasOperation = false;
+        try
         {
             auto getResult = [sessionData](int id, json& out) -> bool
             {
@@ -192,22 +192,15 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
                 e.hasOperation = false;
             };
 
-            try
-            {
-                json result = serialize::Evaluator::evaluateValue(expr, getResult, getOperation, dispatch, cache);
-                auto& e = sessionData->exports[exportId];
-                e.hasOperation = false;
-                e.hasResult = true;
-                e.result = result;
-            }
-            catch (const std::exception& e)
-            {
-                auto& ent = sessionData->exports[exportId];
-                ent.hasOperation = false;
-                ent.hasResult = true;
-                ent.result = serialize::makeError("MethodError", std::string(e.what()));
-            }
-        });
+            entry.hasResult = true;
+            entry.result = serialize::Evaluator::evaluateValue(pushData, getResult, getOperation, dispatch, cache);
+        }
+        catch (const std::exception& e)
+        {
+            entry.hasResult = true;
+            entry.result = serialize::makeError("MethodError", std::string(e.what()));
+        }
+        sessionData->exports[exportId] = std::move(entry);
     }
 }
 

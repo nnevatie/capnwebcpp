@@ -127,12 +127,48 @@ static bool testRemapSimple()
     return ok;
 }
 
+static bool testRemapConstructArrayObject()
+{
+    auto target = std::make_shared<TestTarget>();
+    RpcSession session(target);
+    RpcSessionData data; data.target = target;
+
+    std::string body;
+    // Construct array [1,2]
+    json arrInstr = json::array({ "array", json::array({ json::array({"value", 1}), json::array({"value", 2}) }) });
+    body += json::array({"push", json::array({"remap", 0, json::array(), json::array(), json::array({ arrInstr })})}).dump();
+    body += "\n";
+    body += json::array({"pull", 1}).dump();
+    body += "\n";
+    // Construct object {"x":1, "y":2}
+    json objEntries = json::array({ json::array({"x", json::array({"value", 1})}), json::array({"y", json::array({"value", 2})}) });
+    json objInstr = json::array({ "object", objEntries });
+    body += json::array({"push", json::array({"remap", 0, json::array(), json::array(), json::array({ objInstr })})}).dump();
+    body += "\n";
+    body += json::array({"pull", 2}).dump();
+
+    auto responses = processBatch(session, &data, body);
+    std::cerr << "responses.size=" << responses.size() << std::endl;
+    for (size_t i = 0; i < responses.size(); ++i)
+        std::cerr << "resp[" << i << "]=" << responses[i] << std::endl;
+    bool ok = true;
+    ok &= require(responses.size() == 2, "remap construct: two responses");
+    auto m1 = parse(responses[0]);
+    ok &= require(m1[0] == "resolve" && m1[1] == 1 && m1[2].is_array(), "remap construct: array resolve");
+    ok &= require(m1[2] == json::array({ json::array({1,2}) }), "remap construct: array content (escaped)");
+    auto m2 = parse(responses[1]);
+    ok &= require(m2[0] == "resolve" && m2[1] == 2 && m2[2].is_object(), "remap construct: object resolve");
+    ok &= require(m2[2]["x"] == 1 && m2[2]["y"] == 2, "remap construct: object fields");
+    return ok;
+}
+
 int main()
 {
     int failed = 0;
     failed += !testMultiLinePushPull();
     failed += !testPipelineWithinBatch();
     failed += !testRemapSimple();
+    failed += !testRemapConstructArrayObject();
     if (failed == 0)
     {
         std::cout << "All batch tests passed" << std::endl;
