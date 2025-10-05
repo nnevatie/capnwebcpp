@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <filesystem>
+#include <sstream>
 
 namespace capnwebcpp
 {
@@ -95,3 +96,4 @@ void setupFileEndpoint(App& app, const std::string& path, const std::filesystem:
 }
 
 } // namespace capnwebcpp
+

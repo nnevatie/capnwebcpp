@@ -1,5 +1,6 @@
-#include <capnwebcpp/rpc_service.hpp>
-#include <capnwebcpp/file_service.hpp>
+#include <capnwebcpp/rpc_target.h>
+#include <capnwebcpp/endpoint.h>
+#include <capnwebcpp/file_service.h>
 
 using namespace capnwebcpp;
 

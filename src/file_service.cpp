@@ -1,4 +1,4 @@
-#include "capnwebcpp/file_service.hpp"
+#include "capnwebcpp/file_service.h"
 
 namespace capnwebcpp
 {
