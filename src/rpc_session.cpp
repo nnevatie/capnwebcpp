@@ -121,6 +121,23 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
             entry.method = method;
             entry.args = argsArray;
             entry.callTarget = callTarget;
+
+            // Eagerly evaluate the operation and store the result; transmission still waits for pull.
+            try
+            {
+                json resolvedArgs = resolvePipelineReferences(sessionData, argsArray);
+                json result = callTarget->dispatch(method, resolvedArgs);
+                entry.hasOperation = false;
+                entry.hasResult = true;
+                entry.result = result;
+            }
+            catch (const std::exception& e)
+            {
+                entry.hasOperation = false;
+                entry.hasResult = true;
+                entry.result = serialize::makeError("MethodError", std::string(e.what()));
+            }
+
             sessionData->exports[exportId] = std::move(entry);
         }
     }

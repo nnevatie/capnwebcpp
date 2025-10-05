@@ -139,6 +139,31 @@ static bool testPipelineArgResolution()
     return ok;
 }
 
+static bool testPushNoImmediateResponseThenPull()
+{
+    auto target = std::make_shared<TestTarget>();
+    RpcSession session(target);
+    RpcSessionData data;
+    data.target = target;
+
+    // push: echo("World")
+    json push = json::array({
+        "push",
+        json::array({ "pipeline", 0, json::array({"echo"}), json::array({"World"}) })
+    });
+    std::string noresp = session.handleMessage(&data, push.dump());
+    bool ok = true;
+    ok &= require(noresp.empty(), "push: no immediate response");
+
+    // pull id 1 should yield resolve
+    std::string res = session.handleMessage(&data, json::array({"pull", 1}).dump());
+    json msg = parse(res);
+    ok &= require(msg[0] == "resolve", "push+pull: resolve");
+    ok &= require(msg[1] == 1, "push+pull: export id 1");
+    ok &= require(msg[2] == "Hello, World!", "push+pull: payload matches");
+    return ok;
+}
+
 static bool testReleaseThenPull()
 {
     auto target = std::make_shared<TestTarget>();
@@ -250,6 +275,7 @@ int main()
     failed += !testReleaseThenPull();
     failed += !testNegativeExportEmission();
     failed += !testPromiseExportEmissionAndPull();
+    failed += !testPushNoImmediateResponseThenPull();
 
     if (failed == 0)
     {

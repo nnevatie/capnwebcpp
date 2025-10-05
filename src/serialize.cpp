@@ -162,6 +162,10 @@ json Evaluator::evaluateValue(const json& value,
         if (value.size() >= 1 && value[0].is_string())
         {
             const std::string tag = value[0];
+            if (tag == "remap")
+            {
+                throw std::runtime_error("remap is not supported in this build");
+            }
             if (tag == "bigint")
             {
                 if (value.size() >= 2 && value[1].is_string())
