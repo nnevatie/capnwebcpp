@@ -104,27 +104,29 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
         {
             std::string method = methodArray[0];
 
-            // Determine the target to dispatch the call on.
-            std::shared_ptr<RpcTarget> callTarget = sessionData->target;
-            auto itTarget = sessionData->exports.find(importId);
-            if (importId != 0 && itTarget != sessionData->exports.end() && itTarget->second.callTarget)
+            // Determine the hook to dispatch the call on.
+            std::shared_ptr<StubHook> callHook = makeLocalTargetHook(sessionData->target);
+            if (importId != 0)
             {
-                callTarget = itTarget->second.callTarget;
+                if (auto* src = sessionData->exporter.find(importId))
+                {
+                    if (src->callHook) callHook = src->callHook;
+                }
             }
 
-            sessionData->exporter.setOperation(exportId, method, argsArray, callTarget);
+            sessionData->exporter.setOperation(exportId, method, argsArray, callHook);
 
             // Defer evaluation to microtask queue; transmit still waits for pull.
             int queuedExportId = exportId;
             json queuedArgs = argsArray;
-            enqueueTask([this, sessionData, queuedExportId, method, queuedArgs, callTarget]() mutable
+            enqueueTask([this, sessionData, queuedExportId, method, queuedArgs, callHook]() mutable
             {
                 auto* it = sessionData->exporter.find(queuedExportId);
                 if (!it) return;
                 try
                 {
                     json resolvedArgs = resolvePipelineReferences(sessionData, queuedArgs);
-                    json result = callTarget->dispatch(method, resolvedArgs);
+                    json result = callHook->call(method, resolvedArgs);
                     it->hasOperation = false;
                     it->hasResult = true;
                     it->result = result;
@@ -170,15 +172,15 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
             };
             auto callExport = [this, sessionData](int exportId, const json& path, const json& args) -> json
             {
-                std::shared_ptr<RpcTarget> ct = sessionData->target;
+                std::shared_ptr<StubHook> hook = makeLocalTargetHook(sessionData->target);
                 if (auto* it = sessionData->exporter.find(exportId))
                 {
-                    if (it->callTarget) ct = it->callTarget;
+                    if (it->callHook) hook = it->callHook;
                 }
                 if (!path.is_array() || path.empty() || !path[0].is_string())
                     throw std::runtime_error("invalid export call path");
                 std::string method = path[0].get<std::string>();
-                return ct->dispatch(method, args);
+                return hook->call(method, args);
             };
 
             entry.hasResult = true;
@@ -254,7 +256,7 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
                 {
                     e.hasResult = false;
                 }
-                e.callTarget = sessionData->target;
+                e.callHook = makeLocalTargetHook(sessionData->target);
                 sessionData->exporter.put(id, e);
                 return id;
             });
@@ -277,8 +279,8 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
         {
             json resolvedArgs = resolvePipelineReferences(sessionData, args);
 
-            std::shared_ptr<RpcTarget> callTarget = itExp->callTarget ? itExp->callTarget : sessionData->target;
-            json result = callTarget->dispatch(method, resolvedArgs);
+            std::shared_ptr<StubHook> callHook = itExp->callHook ? itExp->callHook : makeLocalTargetHook(sessionData->target);
+            json result = callHook->call(method, resolvedArgs);
             itExp->hasOperation = false;
             itExp->method.clear();
             itExp->args = json();
@@ -299,7 +301,7 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
                 {
                     e.hasResult = false;
                 }
-                e.callTarget = sessionData->target;
+                e.callHook = makeLocalTargetHook(sessionData->target);
                 sessionData->exporter.put(id, e);
                 return id;
             });

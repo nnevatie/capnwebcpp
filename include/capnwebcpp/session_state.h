@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include "capnwebcpp/rpc_target.h"
+#include "capnwebcpp/stub_hook.h"
 
 namespace capnwebcpp
 {
@@ -29,8 +30,8 @@ struct ExportEntry
     std::string method;               // Valid if hasOperation
     json args;                        // Valid if hasOperation
 
-    // Target on which to dispatch calls for this export (for server-originated exports/stubs).
-    std::shared_ptr<RpcTarget> callTarget;
+    // Hook on which to dispatch calls for this export (for server-originated exports/stubs).
+    std::shared_ptr<StubHook> callHook;
 };
 
 // Import table entry scaffolding for future inbound exports/promises.
@@ -70,14 +71,14 @@ public:
         return &it->second;
     }
 
-    void setOperation(int id, const std::string& method, const json& args, std::shared_ptr<RpcTarget> callTarget)
+    void setOperation(int id, const std::string& method, const json& args, std::shared_ptr<StubHook> callHook)
     {
         ExportEntry entry;
         entry.remoteRefcount = 1;
         entry.hasOperation = true;
         entry.method = method;
         entry.args = args;
-        entry.callTarget = callTarget;
+        entry.callHook = std::move(callHook);
         table[id] = std::move(entry);
     }
 
@@ -204,4 +205,3 @@ struct RpcSessionData
 };
 
 } // namespace capnwebcpp
-
