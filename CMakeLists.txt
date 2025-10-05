@@ -12,3 +12,6 @@ add_subdirectory(src)
 
 # Build examples
 add_subdirectory(examples)
+
+# Build tests
+add_subdirectory(tests)
