@@ -197,8 +197,7 @@ foreach(dir ${_UWS_CANDIDATE_DIRS})
 endforeach()
 
 if(_UWS_INCLUDE_DIR STREQUAL "")
-  message(FATAL_ERROR "uWebSockets headers not found. Check UWS_GIT_TAG=${UWS_GIT_TAG} and repository layout."
-                  " _UWS_SRC='${_UWS_SRC}')
+  message(FATAL_ERROR "uWebSockets headers not found. Check UWS_GIT_TAG=${UWS_GIT_TAG} and repository layout. _UWS_SRC='${_UWS_SRC}'")
 endif()
 
 # Create interface target
