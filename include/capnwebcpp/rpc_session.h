@@ -27,11 +27,22 @@ struct ExportEntry
     json args;                        // Valid if hasOperation
 };
 
+// Import table entry scaffolding for future inbound exports/promises.
+struct ImportEntry
+{
+    int localRefcount = 1;            // Our local references
+    bool hasResolution = false;       // True if resolve/reject received
+    json resolution;                  // Resolved value or error tuple
+};
+
 // Internal data associated with each connection/session.
 struct RpcSessionData
 {
     std::unordered_map<int, ExportEntry> exports; // exportId -> entry
-    int nextExportId = 1;                         // Server-chosen export IDs (simplified)
+    std::unordered_map<int, ImportEntry> imports; // importId -> entry (scaffolding)
+    int nextExportId = 1;                         // Export IDs aligned to client push order (for pull)
+    int nextExportIdNegative = -1;                // Server-chosen negative IDs for exporter-originated
+    int nextImportId = 1;                         // Import IDs we may allocate if we send pushes
     std::shared_ptr<RpcTarget> target;
 };
 
@@ -56,6 +67,12 @@ private:
     void handleRelease(RpcSessionData* sessionData, int exportId, int refcount);
     void handleAbort(RpcSessionData* sessionData, const json& errorData);
     json resolvePipelineReferences(RpcSessionData* sessionData, const json& value);
+
+    // Allocate a new negative export ID for server-originated exports/promises.
+    int allocateNegativeExportId(RpcSessionData* sessionData)
+    {
+        return sessionData->nextExportIdNegative--;
+    }
 };
 
 } // namespace capnwebcpp

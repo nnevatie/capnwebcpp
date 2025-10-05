@@ -43,6 +43,30 @@ std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::st
             }
             return "";
         }
+        case protocol::MessageType::Resolve:
+        {
+            // ["resolve", importId, value]
+            if (m.params.size() >= 2 && m.params[0].is_number())
+            {
+                int importId = m.params[0];
+                auto& imp = sessionData->imports[importId];
+                imp.hasResolution = true;
+                imp.resolution = m.params[1];
+            }
+            return "";
+        }
+        case protocol::MessageType::Reject:
+        {
+            // ["reject", importId, error]
+            if (m.params.size() >= 2 && m.params[0].is_number())
+            {
+                int importId = m.params[0];
+                auto& imp = sessionData->imports[importId];
+                imp.hasResolution = true;
+                imp.resolution = m.params[1];
+            }
+            return "";
+        }
         case protocol::MessageType::Release:
         {
             if (m.params.size() >= 2 && m.params[0].is_number() && m.params[1].is_number())
