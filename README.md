@@ -19,8 +19,8 @@ Early prototype of a server-side subset of the Cap'n Web protocol. The library c
 | Examples interop | ✅ | Helloworld and batch-pipelining with JS clients |
 | Protocol message framing (parse/serialize) | ✅ | MessageType + parser/serializer wired into session |
 | Basic serialization helpers | ✅ | Array escape + error tuples; used for resolve/reject |
-| Import/export tables + refcounts (neg ID policy) | ❌ | Uses simplified pending maps currently |
-| Release semantics | ❌ | `release` is logged only |
+| Import/export tables + refcounts (neg ID policy) | ⚠️ | Tables with local/remote refcounts; negative IDs for server exports/promises |
+| Release semantics | ⚠️ | Import release sent on resolve/reject; export release decrements remote refs |
 | Transport abstraction | ⚠️ | Interface + uWS/batch adapters; no Workers/MessagePort yet |
 | Client stubs/promises in C++ | ❌ | Server-only library |
 | Advanced serialization (bigint/date/bytes/undefined) | ❌ | Special types not supported; basic wrappers present |
@@ -28,6 +28,9 @@ Early prototype of a server-side subset of the Cap'n Web protocol. The library c
 | Abort/onBroken callbacks | ❌ | Basic logging only |
 | `drain()` and stats | ❌ | No coordination APIs yet |
 | `map`/`remap` instruction pipeline | ❌ | Not recognized/processed |
+| Server-originated exports/promises | ✅ | Emits ["export"/"promise", negId]; promise resolves on pull |
+| Calls to exported stubs | ✅ | Pipelined calls dispatch to bound target via importId |
+| Tests + CI | ✅ | Unit tests (RPC/protocol/serialize) and Linux/macOS/Windows CI |
 
 Status icons: ✅ implemented, ⚠️ partial, ❌ not yet implemented
 
