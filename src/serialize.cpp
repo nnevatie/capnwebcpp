@@ -37,9 +37,9 @@ bool isSpecialArray(const json& value)
            tag == "pipeline" || tag == "remap";
 }
 
-static json devaluateObjectForResult(const json& value, const std::function<int()>& newExportId);
+static json devaluateObjectForResult(const json& value, const std::function<int(bool,const json&)>& newExportId);
 
-static json devaluateArrayForResult(const json& arr, const std::function<int()>& newExportId)
+static json devaluateArrayForResult(const json& arr, const std::function<int(bool,const json&)>& newExportId)
 {
     json out = json::array();
     for (const auto& el : arr)
@@ -51,7 +51,7 @@ static json devaluateArrayForResult(const json& arr, const std::function<int()>&
     return out;
 }
 
-static json devaluateObjectForResult(const json& obj, const std::function<int()>& newExportId)
+static json devaluateObjectForResult(const json& obj, const std::function<int(bool,const json&)>& newExportId)
 {
     // Special sentinel objects to request export/promise emission.
     if (obj.is_object())
@@ -59,14 +59,23 @@ static json devaluateObjectForResult(const json& obj, const std::function<int()>
         auto itExp = obj.find("$export");
         if (itExp != obj.end() && itExp->is_boolean() && *itExp)
         {
-            int id = newExportId();
+            int id = newExportId(false, json());
             return json::array({ "export", id });
         }
         auto itProm = obj.find("$promise");
-        if (itProm != obj.end() && itProm->is_boolean() && *itProm)
+        if (itProm != obj.end())
         {
-            int id = newExportId();
-            return json::array({ "promise", id });
+            if (itProm->is_boolean() && *itProm)
+            {
+                int id = newExportId(true, json());
+                return json::array({ "promise", id });
+            }
+            else
+            {
+                // If $promise holds a value, use that as the resolution payload.
+                int id = newExportId(true, *itProm);
+                return json::array({ "promise", id });
+            }
         }
     }
 
@@ -81,7 +90,7 @@ static json devaluateObjectForResult(const json& obj, const std::function<int()>
     return out;
 }
 
-json devaluateForResult(const json& value, const std::function<int()>& newExportId)
+json devaluateForResult(const json& value, const std::function<int(bool,const json&)>& newExportId)
 {
     if (value.is_object())
         return devaluateObjectForResult(value, newExportId);

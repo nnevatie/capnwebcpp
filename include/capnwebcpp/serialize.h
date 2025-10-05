@@ -60,7 +60,11 @@ bool isSpecialArray(const json& value);
 // Recognizes objects like {"$export": true} and {"$promise": true} and converts them to
 // ["export", id] and ["promise", id], respectively, using the provided allocator to obtain
 // negative export IDs.
-json devaluateForResult(const json& value, const std::function<int()>& newExportId);
+// Callback allocates a new export ID and may record extra metadata for promises.
+// isPromise == true when emitting a ["promise", id] expression, in which case `payload` is the
+// promised resolution value to use when pulled.
+json devaluateForResult(const json& value,
+                        const std::function<int(bool /*isPromise*/, const json& /*payload*/ )>& newExportId);
 
 } // namespace serialize
 

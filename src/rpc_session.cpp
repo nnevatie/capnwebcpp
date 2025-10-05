@@ -169,9 +169,18 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
         {
             msg.type = protocol::MessageType::Resolve;
             // Devaluate result for exports/promises; then wrap arrays unless special expression.
-            json deval = serialize::devaluateForResult(result, [this, sessionData]() {
+            json deval = serialize::devaluateForResult(result, [this, sessionData](bool isPromise, const json& payload) {
                 int id = allocateNegativeExportId(sessionData);
-                ExportEntry e; e.refcount = 1; e.hasResult = false; e.hasOperation = false;
+                ExportEntry e; e.refcount = 1; e.hasOperation = false;
+                if (isPromise)
+                {
+                    e.hasResult = true;
+                    e.result = payload; // Promise resolves to this payload when pulled
+                }
+                else
+                {
+                    e.hasResult = false;
+                }
                 sessionData->exports[id] = e;
                 return id;
             });
@@ -203,9 +212,18 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
 
             protocol::Message msg;
             msg.type = protocol::MessageType::Resolve;
-            json deval = serialize::devaluateForResult(result, [this, sessionData]() {
+            json deval = serialize::devaluateForResult(result, [this, sessionData](bool isPromise, const json& payload) {
                 int id = allocateNegativeExportId(sessionData);
-                ExportEntry e; e.refcount = 1; e.hasResult = false; e.hasOperation = false;
+                ExportEntry e; e.refcount = 1; e.hasOperation = false;
+                if (isPromise)
+                {
+                    e.hasResult = true;
+                    e.result = payload;
+                }
+                else
+                {
+                    e.hasResult = false;
+                }
                 sessionData->exports[id] = e;
                 return id;
             });

@@ -52,6 +52,13 @@ struct TestTarget : public RpcTarget
         {
             return json{ {"$export", true} };
         });
+
+        // getExportPromise() -> special object that devaluator will turn into ["promise", -1]
+        // and resolves to {"ok":true}
+        method("getExportPromise", [](const json&)
+        {
+            return json{ {"$promise", json{ {"ok", true} }} };
+        });
     }
 };
 
@@ -186,6 +193,40 @@ static bool testNegativeExportEmission()
     return ok;
 }
 
+static bool testPromiseExportEmissionAndPull()
+{
+    auto target = std::make_shared<TestTarget>();
+    RpcSession session(target);
+    RpcSessionData data;
+    data.target = target;
+
+    // push: getExportPromise()
+    json push = json::array({
+        "push",
+        json::array({ "pipeline", 0, json::array({"getExportPromise"}) })
+    });
+    session.handleMessage(&data, push.dump());
+
+    // pull export 1
+    std::string res = session.handleMessage(&data, json::array({"pull", 1}).dump());
+    json msg = parse(res);
+    bool ok = true;
+    ok &= require(msg[0] == "resolve", "promise export: resolve frame");
+    ok &= require(msg[1] == 1, "promise export: id 1");
+    ok &= require(msg[2].is_array() && msg[2][0] == "promise" && msg[2][1].is_number_integer() && msg[2][1] < 0,
+                 "promise export: payload is [promise, negId]");
+
+    int promiseId = msg[2][1];
+
+    // now pull the promise export id -> should resolve to {"ok":true}
+    std::string res2 = session.handleMessage(&data, json::array({"pull", promiseId}).dump());
+    json msg2 = parse(res2);
+    ok &= require(msg2[0] == "resolve", "promise export: inner resolve");
+    ok &= require(msg2[1] == promiseId, "promise export: inner id match");
+    ok &= require(msg2[2].is_object() && msg2[2]["ok"] == true, "promise export: resolution payload");
+    return ok;
+}
+
 int main()
 {
     int failed = 0;
@@ -193,6 +234,7 @@ int main()
     failed += !testPipelineArgResolution();
     failed += !testReleaseThenPull();
     failed += !testNegativeExportEmission();
+    failed += !testPromiseExportEmissionAndPull();
 
     if (failed == 0)
     {
