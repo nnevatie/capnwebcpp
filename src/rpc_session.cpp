@@ -90,88 +90,41 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
 
 json RpcSession::resolvePipelineReferences(RpcSessionData* sessionData, const json& value)
 {
-    if (value.is_array())
+    auto getResult = [sessionData](int exportId, json& out) -> bool
     {
-        if (value.size() >= 2 && value[0].is_string() && value[0] == "pipeline" && value[1].is_number())
+        auto it = sessionData->pendingResults.find(exportId);
+        if (it != sessionData->pendingResults.end())
         {
-            int refExportId = value[1];
-
-            auto it = sessionData->pendingResults.find(refExportId);
-            if (it != sessionData->pendingResults.end())
-            {
-                json result = it->second;
-
-                if (value.size() >= 3 && value[2].is_array())
-                {
-                    for (const auto& key : value[2])
-                    {
-                        if (key.is_string() && result.is_object())
-                        {
-                            result = result[key.get<std::string>()];
-                        }
-                        else if (key.is_number() && result.is_array())
-                        {
-                            result = result[key.get<int>()];
-                        }
-                    }
-                }
-
-                return result;
-            }
-            else if (sessionData->pendingOperations.find(refExportId) != sessionData->pendingOperations.end())
-            {
-                json& operation = sessionData->pendingOperations[refExportId];
-                std::string method = operation["method"];
-                json args = operation["args"];
-
-                json resolvedArgs = resolvePipelineReferences(sessionData, args);
-
-                json result = sessionData->target->dispatch(method, resolvedArgs);
-
-                sessionData->pendingResults[refExportId] = result;
-                sessionData->pendingOperations.erase(refExportId);
-
-                if (value.size() >= 3 && value[2].is_array())
-                {
-                    for (const auto& key : value[2])
-                    {
-                        if (key.is_string() && result.is_object())
-                        {
-                            result = result[key.get<std::string>()];
-                        }
-                        else if (key.is_number() && result.is_array())
-                        {
-                            result = result[key.get<int>()];
-                        }
-                    }
-                }
-
-                return result;
-            }
-            else
-            {
-                throw std::runtime_error("Pipeline reference to non-existent export: " + std::to_string(refExportId));
-            }
+            out = it->second;
+            return true;
         }
-        else
+        return false;
+    };
+
+    auto getOperation = [sessionData](int exportId, std::string& method, json& args) -> bool
+    {
+        auto it = sessionData->pendingOperations.find(exportId);
+        if (it != sessionData->pendingOperations.end())
         {
-            json resolved = json::array();
-            for (const auto& elem : value)
-                resolved.push_back(resolvePipelineReferences(sessionData, elem));
-            return resolved;
+            method = it->second["method"].get<std::string>();
+            args = it->second["args"];
+            return true;
         }
-    }
-    else if (value.is_object())
+        return false;
+    };
+
+    auto dispatch = [this, sessionData](const std::string& method, const json& args) -> json
     {
-        json resolved = json::object();
-        for (auto& [key, val] : value.items())
-            resolved[key] = resolvePipelineReferences(sessionData, val);
-        return resolved;
-    }
-    else
+        return sessionData->target->dispatch(method, args);
+    };
+
+    auto cache = [sessionData](int exportId, const json& result)
     {
-        return value;
-    }
+        sessionData->pendingResults[exportId] = result;
+        sessionData->pendingOperations.erase(exportId);
+    };
+
+    return serialize::Evaluator::evaluateValue(value, getResult, getOperation, dispatch, cache);
 }
 
 protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int exportId)

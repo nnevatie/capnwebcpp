@@ -2,6 +2,7 @@
 
 #include <string>
 #include <nlohmann/json.hpp>
+#include <functional>
 
 namespace capnwebcpp
 {
@@ -21,7 +22,33 @@ json makeError(const std::string& name, const std::string& message);
 json resolveFrame(int exportId, const json& value);
 json rejectFrame(int exportId, const json& errorTuple);
 
+// --------------------------------------------------------------------------------------
+// Evaluator / Devaluator-style processing (subset)
+
+class Devaluator
+{
+public:
+    // For now, devaluator is trivial as server values are plain JSON.
+    static json devaluate(const json& value) { return value; }
+};
+
+class Evaluator
+{
+public:
+    using ResultGetter = std::function<bool(int /*exportId*/, json& /*outResult*/)>;
+    using OperationGetter = std::function<bool(int /*exportId*/, std::string& /*method*/, json& /*args*/)>;
+    using Dispatcher = std::function<json(const std::string& /*method*/, const json& /*args*/)>;
+    using Cacher = std::function<void(int /*exportId*/, const json& /*result*/)>;
+
+    // Evaluate a value tree, resolving any ["pipeline", exportId, path?] references by using
+    // callbacks to fetch or compute results, then traversing property paths.
+    static json evaluateValue(const json& value,
+                              const ResultGetter& getResult,
+                              const OperationGetter& getOperation,
+                              const Dispatcher& dispatch,
+                              const Cacher& cache);
+};
+
 } // namespace serialize
 
 } // namespace capnwebcpp
-
