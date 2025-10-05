@@ -25,6 +25,9 @@ struct ExportEntry
     bool hasOperation = false;
     std::string method;               // Valid if hasOperation
     json args;                        // Valid if hasOperation
+
+    // Target on which to dispatch calls for this export (for server-originated exports/stubs).
+    std::shared_ptr<RpcTarget> callTarget;
 };
 
 // Import table entry scaffolding for future inbound exports/promises.

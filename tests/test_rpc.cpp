@@ -181,7 +181,7 @@ static bool testNegativeExportEmission()
     });
     session.handleMessage(&data, push.dump());
 
-    // pull export 1
+    // pull export 1 -> expect ["export", negId]
     std::string res = session.handleMessage(&data, json::array({"pull", 1}).dump());
     json msg = parse(res);
     bool ok = true;
@@ -190,6 +190,21 @@ static bool testNegativeExportEmission()
     ok &= require(msg[2].is_array() && msg[2].size() == 2 && msg[2][0] == "export" && msg[2][1].is_number_integer(),
                  "negative export: payload is [export, id]");
     ok &= require(msg[2][1] < 0, "negative export: id is negative");
+
+    int stubId = msg[2][1];
+
+    // Now call a method on the exported stub: echo("Bob")
+    json push2 = json::array({
+        "push",
+        json::array({ "pipeline", stubId, json::array({"echo"}), json::array({"Bob"}) })
+    });
+    session.handleMessage(&data, push2.dump());
+    // Pull result export 2
+    std::string res2 = session.handleMessage(&data, json::array({"pull", 2}).dump());
+    json msg2 = parse(res2);
+    ok &= require(msg2[0] == "resolve", "negative export: method call resolve");
+    ok &= require(msg2[1] == 2, "negative export: new export id 2");
+    ok &= require(msg2[2] == "Hello, Bob!", "negative export: method call payload");
     return ok;
 }
 

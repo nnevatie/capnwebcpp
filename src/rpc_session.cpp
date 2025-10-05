@@ -93,18 +93,27 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
     if (pushData[0] == "pipeline" && pushData.size() >= 3)
     {
         int importId = pushData[1];
-        (void)importId;
         auto methodArray = pushData[2];
         auto argsArray = pushData.size() >= 4 ? pushData[3] : json::array();
 
         if (methodArray.is_array() && !methodArray.empty())
         {
             std::string method = methodArray[0];
+
+            // Determine the target to dispatch the call on.
+            std::shared_ptr<RpcTarget> callTarget = sessionData->target;
+            auto itTarget = sessionData->exports.find(importId);
+            if (importId != 0 && itTarget != sessionData->exports.end() && itTarget->second.callTarget)
+            {
+                callTarget = itTarget->second.callTarget;
+            }
+
             ExportEntry entry;
             entry.refcount = 1;
             entry.hasOperation = true;
             entry.method = method;
             entry.args = argsArray;
+            entry.callTarget = callTarget;
             sessionData->exports[exportId] = std::move(entry);
         }
     }
@@ -181,6 +190,7 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
                 {
                     e.hasResult = false;
                 }
+                e.callTarget = sessionData->target;
                 sessionData->exports[id] = e;
                 return id;
             });
@@ -203,7 +213,8 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
         {
             json resolvedArgs = resolvePipelineReferences(sessionData, args);
 
-            json result = sessionData->target->dispatch(method, resolvedArgs);
+            std::shared_ptr<RpcTarget> callTarget = itExp->second.callTarget ? itExp->second.callTarget : sessionData->target;
+            json result = callTarget->dispatch(method, resolvedArgs);
             itExp->second.hasOperation = false;
             itExp->second.method.clear();
             itExp->second.args = json();
@@ -224,6 +235,7 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
                 {
                     e.hasResult = false;
                 }
+                e.callTarget = sessionData->target;
                 sessionData->exports[id] = e;
                 return id;
             });
