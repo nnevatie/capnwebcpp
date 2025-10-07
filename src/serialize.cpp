@@ -178,17 +178,17 @@ json Evaluator::evaluateValue(const json& value,
                 const json& instructions = value[4];
 
                 // Build capture vector of export IDs from sender's perspective (our exports table).
-                std::vector<int> captureIds;
+                struct Cap { bool isImport; int id; };
+                std::vector<Cap> capturesVec;
                 for (const auto& cap : captures)
                 {
                     if (!cap.is_array() || cap.size() != 2 || !cap[0].is_string() || !cap[1].is_number())
                         throw std::runtime_error("invalid remap capture");
                     std::string capTag = cap[0];
                     int id = cap[1];
-                    // For our simplified model, both ["import", id] and ["export", id] are treated as export IDs.
                     if (capTag != "import" && capTag != "export")
                         throw std::runtime_error("unknown remap capture tag");
-                    captureIds.push_back(id);
+                    capturesVec.push_back(Cap{capTag == "import", id});
                 }
 
                 // Resolve the base input value from the export + path using pipeline evaluation.
@@ -234,11 +234,19 @@ json Evaluator::evaluateValue(const json& value,
                         json resultVal;
                         if (subjectIdx < 0)
                         {
-                            // Default evaluator: fallback to dispatch on first method segment.
+                            int capIndex = -subjectIdx - 1;
+                            if (capIndex < 0 || capIndex >= (int)capturesVec.size())
+                                throw std::runtime_error("remap capture index out of range");
+                            const Cap& c = capturesVec[capIndex];
+                            if (!c.isImport)
+                                throw std::runtime_error("remap pipeline on export capture not supported");
+                            // Without a caller hook here, remap with captured calls must be evaluated in
+                            // evaluateValueWithCaller(), not this path.
                             json resolvedArgs = hasArgs ? evaluateValue(args, getResult, getOperation, dispatch, cache) : json::array();
                             if (!path.is_array() || path.empty() || !path[0].is_string())
                                 throw std::runtime_error("remap pipeline invalid method path");
                             std::string method = path[0];
+                            // Treat like a local dispatch of the captured import's method name.
                             resultVal = dispatch(method, resolvedArgs);
                         }
                         else
@@ -270,9 +278,12 @@ json Evaluator::evaluateValue(const json& value,
                         if (subjectIdx < 0)
                         {
                             int capIndex = -subjectIdx - 1;
-                            if (capIndex < 0 || capIndex >= (int)captureIds.size())
+                            if (capIndex < 0 || capIndex >= (int)capturesVec.size())
                                 throw std::runtime_error("remap capture index out of range");
-                            int expId = captureIds[capIndex];
+                            const Cap& c = capturesVec[capIndex];
+                            if (!c.isImport)
+                                throw std::runtime_error("remap get on export capture not supported");
+                            int expId = c.id;
                             json expr = json::array({ "pipeline", expId, path });
                             resultVal = evaluateValue(expr, getResult, getOperation, dispatch, cache);
                         }
@@ -461,7 +472,8 @@ json Evaluator::evaluateValueWithCaller(const json& value,
                     const json& captures = v[3];
                     const json& instructions = v[4];
 
-                    std::vector<int> captureIds;
+                    struct Cap { bool isImport; int id; };
+                    std::vector<Cap> capturesVec;
                     for (const auto& cap : captures)
                     {
                         if (!cap.is_array() || cap.size() != 2 || !cap[0].is_string() || !cap[1].is_number())
@@ -470,7 +482,7 @@ json Evaluator::evaluateValueWithCaller(const json& value,
                         int id = cap[1];
                         if (capTag != "import" && capTag != "export")
                             throw std::runtime_error("unknown remap capture tag");
-                        captureIds.push_back(id);
+                        capturesVec.push_back(Cap{capTag == "import", id});
                     }
 
                     json input;
@@ -513,9 +525,12 @@ json Evaluator::evaluateValueWithCaller(const json& value,
                             {
                                 json resolvedArgs = hasArgs ? eval(args) : json::array();
                                 int capIndex = -subjectIdx - 1;
-                                if (capIndex < 0 || capIndex >= (int)captureIds.size())
+                                if (capIndex < 0 || capIndex >= (int)capturesVec.size())
                                     throw std::runtime_error("remap capture index out of range");
-                                int expId = captureIds[capIndex];
+                                const Cap& c = capturesVec[capIndex];
+                                if (!c.isImport)
+                                    throw std::runtime_error("remap pipeline on export capture not supported");
+                                int expId = c.id;
                                 resultVal = callExport(expId, path, resolvedArgs);
                             }
                             else
@@ -543,9 +558,12 @@ json Evaluator::evaluateValueWithCaller(const json& value,
                             if (subjectIdx < 0)
                             {
                                 int capIndex = -subjectIdx - 1;
-                                if (capIndex < 0 || capIndex >= (int)captureIds.size())
+                                if (capIndex < 0 || capIndex >= (int)capturesVec.size())
                                     throw std::runtime_error("remap capture index out of range");
-                                int expId = captureIds[capIndex];
+                                const Cap& c = capturesVec[capIndex];
+                                if (!c.isImport)
+                                    throw std::runtime_error("remap get on export capture not supported");
+                                int expId = c.id;
                                 resultVal = eval(json::array({"pipeline", expId, path}));
                             }
                             else

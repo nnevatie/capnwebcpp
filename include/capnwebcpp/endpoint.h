@@ -13,6 +13,7 @@
 #include "capnwebcpp/transports/uws_websocket_transport.h"
 #include "capnwebcpp/transports/accum_transport.h"
 #include "capnwebcpp/batch.h"
+#include "capnwebcpp/serialize.h"
 
 namespace capnwebcpp
 {
@@ -44,6 +45,15 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
             catch (const std::exception& e)
             {
                 std::cerr << "Error processing message: " << e.what() << std::endl;
+                // Attempt to notify the peer and local listeners about the fatal error.
+                try
+                {
+                    UwsWebSocketTransport<decltype(ws)> transport(ws);
+                    auto err = serialize::makeError("ServerError", std::string(e.what()));
+                    transport.send(session->buildAbort(err));
+                }
+                catch (...) {}
+                session->markAborted(std::string(e.what()));
             }
         },
         .drain = [](auto*)
@@ -91,7 +101,7 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
                     }
 
                     // Ensure the session has drained outstanding pulls before ending.
-                    (void)session->isDrained();
+                    session->drain(&sessionData);
                     res->end(responseBody);
                 }
                 catch (const std::exception& e)

@@ -87,6 +87,23 @@ std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::st
     return "";
 }
 
+std::string RpcSession::buildAbort(const json& errorPayload)
+{
+    protocol::Message msg;
+    msg.type = protocol::MessageType::Abort;
+    msg.params = json::array({ errorPayload });
+    return protocol::serialize(msg);
+}
+
+void RpcSession::markAborted(const std::string& reason)
+{
+    aborted = true;
+    for (auto& cb : onBrokenCallbacks)
+    {
+        try { cb(reason); } catch (...) {}
+    }
+}
+
 void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
 {
     if (!pushData.is_array())
@@ -193,6 +210,17 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
         }
         sessionData->exporter.put(exportId, entry);
     }
+}
+
+RpcSession::RpcStats RpcSession::getStats(const RpcSessionData* sessionData) const
+{
+    RpcStats s;
+    if (sessionData)
+    {
+        s.imports = static_cast<int>(sessionData->importer.table.size());
+        s.exports = static_cast<int>(sessionData->exporter.table.size());
+    }
+    return s;
 }
 
 json RpcSession::resolvePipelineReferences(RpcSessionData* sessionData, const json& value)

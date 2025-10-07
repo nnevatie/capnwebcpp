@@ -41,6 +41,38 @@ public:
     // Internal onBroken registration (reserved for future use).
     void registerOnBroken(std::function<void(const std::string&)> cb) { onBrokenCallbacks.push_back(std::move(cb)); }
 
+    // Build a serialized abort frame with the given error payload.
+    // Intended to be sent to the peer prior to closing the connection.
+    std::string buildAbort(const json& errorPayload);
+
+    // Mark session aborted locally and notify registered onBroken callbacks.
+    void markAborted(const std::string& reason);
+
+    // ----------------------------------------------------------------------------
+    // Parity helpers
+
+    // Stats reported to caller for parity with capnweb's getStats().
+    struct RpcStats
+    {
+        int imports = 0;
+        int exports = 0;
+    };
+
+    // Compute stats (counts of active imports / exports) from session state.
+    RpcStats getStats(const RpcSessionData* sessionData) const;
+
+    // Process microtasks until no outstanding work remains.
+    void drain(RpcSessionData* /*sessionData*/)
+    {
+        // For now, drain is equivalent to processing queued tasks until none remain and
+        // no pulls are in-flight. In this single-threaded model, processTasks() will
+        // empty the microtask queue synchronously.
+        while (!isDrained())
+        {
+            processTasks();
+        }
+    }
+
 private:
     std::shared_ptr<RpcTarget> target;
 

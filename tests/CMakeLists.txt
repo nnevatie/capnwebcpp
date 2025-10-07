@@ -32,3 +32,36 @@ target_link_libraries(capnwebcpp_tests_batch PRIVATE
 )
 
 add_test(NAME capnwebcpp_tests_batch COMMAND capnwebcpp_tests_batch)
+
+add_executable(capnwebcpp_tests_abort
+    test_abort.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_abort PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_abort COMMAND capnwebcpp_tests_abort)
+
+add_executable(capnwebcpp_tests_drain_stats
+    test_drain_stats.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_drain_stats PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_drain_stats COMMAND capnwebcpp_tests_drain_stats)
+
+add_executable(capnwebcpp_tests_remap_captures
+    test_remap_captures.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_remap_captures PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_remap_captures COMMAND capnwebcpp_tests_remap_captures)
