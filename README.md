@@ -19,17 +19,20 @@ Early prototype of a server-side subset of the Cap'n Web protocol. The library c
 | Examples interop | ✅ | Helloworld and batch-pipelining with JS clients |
 | Protocol message framing (parse/serialize) | ✅ | MessageType + parser/serializer wired into session |
 | Serialization (JSON + extended types) | ✅ | Array escape; bigint/date/bytes/undefined/error encoding/decoding |
-| Import/export tables + refcounts (neg ID policy) | ⚠️ | Local/remote refcounts; negative IDs; inbound/outbound parity improving |
-| Release semantics | ⚠️ | Import release sent on resolve/reject; export release decrements remote refs |
-| Transport abstraction | ⚠️ | Interface + uWS/batch adapters; no Workers/MessagePort yet |
+| Import/export tables + refcounts (neg ID policy) | ✅ | Re-export reuse; remoteRefcount tracked; negative IDs |
+| Release semantics | ✅ | Auto-release on resolve/reject; export release decrements and erases at zero (aggregated supported) |
+| Transport abstraction | ✅ | Interface + uWS/HTTP batch + MessagePort adapters |
 | Client stubs/promises in C++ | ❌ | Server-only library |
 | Advanced serialization (capnweb extended types) | ✅ | Supported via sentinel wrappers ($bigint/$date/$bytes/$undefined/$error) |
 | Error redaction hooks | ⚠️ | onSendError hook available on session (API surface TBD) |
-| Abort/onBroken callbacks | ✅ | Send abort frames and propagate onBroken callbacks |
+| Abort/onBroken callbacks | ✅ | Send abort frames, close transport, cleanup tables, propagate onBroken callbacks |
 | Drain and stats | ✅ | drain() + getStats() implemented; batch awaits drain |
 | `map`/`remap` instruction pipeline | ✅ | Supports pipeline/get/value/array/object/nested remap |
 | Remap capture distinction | ✅ | Distinguishes ["import"] vs ["export"] captures |
-| Client-call path for remap exports | ✅ | Calls captured exports via push/pull; forwards resolution to promise |
+| Client-call path for remap exports | ✅ | Calls captured exports (method/get) via push/pull; forwards resolution to promise |
+| Public server→client call API | ✅ | `callClient()`/`callClientMethod()` for direct server-initiated calls |
+| MessagePort transport | ✅ | In-process MessageChannel + transport adapter |
+| Serialization hardening | ✅ | Depth guards; property path validation; reserved key sanitization |
 | Server-originated exports/promises | ✅ | Emits ["export"/"promise", negId]; promise resolves on pull |
 | Calls to exported stubs | ✅ | Pipelined calls and remap captured calls dispatch to correct target |
 | Tests + CI | ✅ | Unit tests (RPC/protocol/serialize) and Linux/macOS/Windows CI |
