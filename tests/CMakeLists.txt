@@ -98,3 +98,14 @@ target_link_libraries(capnwebcpp_tests_reexport PRIVATE
 )
 
 add_test(NAME capnwebcpp_tests_reexport COMMAND capnwebcpp_tests_reexport)
+
+add_executable(capnwebcpp_tests_reexport_aggregate_release
+    test_reexport_aggregate_release.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_reexport_aggregate_release PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_reexport_aggregate_release COMMAND capnwebcpp_tests_reexport_aggregate_release)
