@@ -7,7 +7,7 @@ The library does not offer many conveniences - it only supplies the minimal plum
 
 ## Status
 
-Early prototype of a server-side subset of the Cap'n Web protocol. The library currently provides a minimal but working implementation that interoperates with the original TypeScript/JavaScript capnweb client.
+Server-focused implementation of the Cap'n Web RPC protocol with bidirectional calling support. capnwebcpp provides WebSocket and HTTP-batch transports plus a MessagePort adapter, implements remap and a client-call path for server→client calls, and includes serialization hardening and robust lifecycle handling. The library targets server-side usage (no C++ client stubs) and interoperates with the original TypeScript/JavaScript capnweb client.
 
 | Feature | Status | Notes |
 | --- | --- | --- |
