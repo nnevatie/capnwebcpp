@@ -5,6 +5,18 @@ namespace capnwebcpp
 namespace serialize
 {
 
+static constexpr int MAX_SERIALIZE_DEPTH = 64;
+
+static bool isValidPath(const json& path)
+{
+    if (!path.is_array()) return false;
+    for (const auto& part : path)
+    {
+        if (!(part.is_string() || part.is_number_integer())) return false;
+    }
+    return true;
+}
+
 
 json wrapArrayIfNeeded(const json& value)
 {
@@ -38,22 +50,26 @@ bool isSpecialArray(const json& value)
            tag == "pipeline" || tag == "remap";
 }
 
-static json devaluateObjectForResult(const json& value, const std::function<int(bool,const json&)>& newExportId);
+static json devaluateObjectForResult(const json& value, const std::function<int(bool,const json&)>& newExportId, int depth);
 
-static json devaluateArrayForResult(const json& arr, const std::function<int(bool,const json&)>& newExportId)
+static json devaluateArrayForResult(const json& arr, const std::function<int(bool,const json&)>& newExportId, int depth)
 {
+    if (depth > MAX_SERIALIZE_DEPTH)
+        throw std::runtime_error("Serialization exceeded maximum allowed depth");
     json out = json::array();
     for (const auto& el : arr)
     {
-        if (el.is_object()) out.push_back(devaluateObjectForResult(el, newExportId));
-        else if (el.is_array()) out.push_back(devaluateArrayForResult(el, newExportId));
+        if (el.is_object()) out.push_back(devaluateObjectForResult(el, newExportId, depth + 1));
+        else if (el.is_array()) out.push_back(devaluateArrayForResult(el, newExportId, depth + 1));
         else out.push_back(el);
     }
     return out;
 }
 
-static json devaluateObjectForResult(const json& obj, const std::function<int(bool,const json&)>& newExportId)
+static json devaluateObjectForResult(const json& obj, const std::function<int(bool,const json&)>& newExportId, int depth)
 {
+    if (depth > MAX_SERIALIZE_DEPTH)
+        throw std::runtime_error("Serialization exceeded maximum allowed depth");
     // Special sentinel objects to request export/promise emission.
     if (obj.is_object())
     {
@@ -117,8 +133,8 @@ static json devaluateObjectForResult(const json& obj, const std::function<int(bo
     json out = json::object();
     for (auto& [k, v] : obj.items())
     {
-        if (v.is_object()) out[k] = devaluateObjectForResult(v, newExportId);
-        else if (v.is_array()) out[k] = devaluateArrayForResult(v, newExportId);
+        if (v.is_object()) out[k] = devaluateObjectForResult(v, newExportId, depth + 1);
+        else if (v.is_array()) out[k] = devaluateArrayForResult(v, newExportId, depth + 1);
         else out[k] = v;
     }
     return out;
@@ -127,9 +143,9 @@ static json devaluateObjectForResult(const json& obj, const std::function<int(bo
 json devaluateForResult(const json& value, const std::function<int(bool,const json&)>& newExportId)
 {
     if (value.is_object())
-        return devaluateObjectForResult(value, newExportId);
+        return devaluateObjectForResult(value, newExportId, 0);
     if (value.is_array())
-        return devaluateArrayForResult(value, newExportId);
+        return devaluateArrayForResult(value, newExportId, 0);
     return value;
 }
 
@@ -157,6 +173,27 @@ json Evaluator::evaluateValue(const json& value,
                               const Dispatcher& dispatch,
                               const Cacher& cache)
 {
+    // Depth pre-scan to avoid excessive nesting
+    std::function<int(const json&, int)> depthOf = [&](const json& v, int d) -> int
+    {
+        if (d > MAX_SERIALIZE_DEPTH) return d;
+        if (v.is_array())
+        {
+            int m = d;
+            for (const auto& e : v) m = std::max(m, depthOf(e, d + 1));
+            return m;
+        }
+        if (v.is_object())
+        {
+            int m = d;
+            for (auto it = v.begin(); it != v.end(); ++it) m = std::max(m, depthOf(it.value(), d + 1));
+            return m;
+        }
+        return d;
+    };
+    if (depthOf(value, 0) > MAX_SERIALIZE_DEPTH)
+        throw std::runtime_error("Deserialization exceeded maximum allowed depth");
+
     if (value.is_array())
     {
         // Handle extended types first
@@ -398,7 +435,11 @@ json Evaluator::evaluateValue(const json& value,
             {
                 // Use cached result, then apply optional path.
                 if (value.size() >= 3)
+                {
+                    if (!isValidPath(value[2]))
+                        throw std::runtime_error("invalid pipeline path");
                     result = traversePath(result, value[2]);
+                }
                 return result;
             }
             else
@@ -417,7 +458,11 @@ json Evaluator::evaluateValue(const json& value,
                 cache(exportId, computed);
 
                 if (value.size() >= 3)
+                {
+                    if (!isValidPath(value[2]))
+                        throw std::runtime_error("invalid pipeline path");
                     computed = traversePath(computed, value[2]);
+                }
                 return computed;
             }
         }
@@ -436,6 +481,11 @@ json Evaluator::evaluateValue(const json& value,
         json resolved = json::object();
         for (auto& [key, val] : value.items())
         {
+            if (key == "__proto__" || key == "toJSON")
+            {
+                (void)evaluateValue(val, getResult, getOperation, dispatch, cache);
+                continue;
+            }
             resolved[key] = evaluateValue(val, getResult, getOperation, dispatch, cache);
         }
         return resolved;
@@ -697,7 +747,15 @@ json Evaluator::evaluateValueWithCaller(const json& value,
         else if (v.is_object())
         {
             json out = json::object();
-            for (auto& [k, vv] : v.items()) out[k] = eval(vv);
+            for (auto& [k, vv] : v.items())
+            {
+                if (k == "__proto__" || k == "toJSON")
+                {
+                    (void)eval(vv);
+                    continue;
+                }
+                out[k] = eval(vv);
+            }
             return out;
         }
         else

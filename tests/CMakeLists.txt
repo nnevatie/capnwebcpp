@@ -109,3 +109,14 @@ target_link_libraries(capnwebcpp_tests_reexport_aggregate_release PRIVATE
 )
 
 add_test(NAME capnwebcpp_tests_reexport_aggregate_release COMMAND capnwebcpp_tests_reexport_aggregate_release)
+
+add_executable(capnwebcpp_tests_serialize_hardening
+    test_serialize_hardening.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_serialize_hardening PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_serialize_hardening COMMAND capnwebcpp_tests_serialize_hardening)
