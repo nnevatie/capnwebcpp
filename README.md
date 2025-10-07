@@ -40,11 +40,13 @@ Server-focused implementation of the Cap'n Web RPC protocol with bidirectional c
 Status icons: ✅ implemented, ⚠️ partial, ❌ not yet implemented
 
 Ongoing Work
-- Refactoring toward the TS/JS architecture (separating session/core/transport)
-- Improving protocol conformance and resource management
-- Release/refcount parity for re-exports and multi-release
-- MessagePort transport and additional helpers
-- Serialization hardening (depth/keys sanitization) and more cross-compat tests
+- Public API polish: error redaction (onSendError) contract, diagnostics (stats/logging)
+- Multi-target re-export identity (stable IDs per target instance)
+- Workers/Node convenience helpers and transport adapters
+- Cross-interop and fuzz tests against capnweb
+- Performance: microtask scheduling and pipeline caching
+- Documentation: batch-mode limitations and server→client examples
+- Optional: minimal C++ client stubs/promises
 
 ## Dependencies
 
