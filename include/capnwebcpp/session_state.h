@@ -208,6 +208,11 @@ struct RpcSessionData
     // Map of our initiated import IDs to server-exported promise IDs for forwarding resolution.
     std::unordered_map<int, int> importToPromiseExport;
 
+    // Canonical local call hook for the server target; used to re-export stubs consistently.
+    std::shared_ptr<StubHook> localTargetHook;
+    // Reverse export map: hook identity -> export ID (for re-export parity).
+    std::unordered_map<std::uintptr_t, int> reverseExport;
+
     // Back-compat field aliases for existing tests and code paths.
     std::unordered_map<int, ExportEntry>& exports;
     std::unordered_map<int, ImportEntry>& imports;

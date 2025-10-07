@@ -33,6 +33,8 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
             userData->target = target;
             // Persist a transport for out-of-band sends (client-call path).
             userData->transport = std::make_shared<UwsWebSocketTransport<decltype(ws)>>(ws);
+            // Create a canonical local target hook for re-export parity.
+            userData->localTargetHook = makeLocalTargetHook(target);
             session->onOpen(userData);
         },
         .message = [session](auto* ws, std::string_view message, uWS::OpCode)

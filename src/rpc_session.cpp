@@ -15,6 +15,7 @@ void RpcSession::onOpen(RpcSessionData* sessionData)
     std::cout << "WebSocket connection opened" << std::endl;
     sessionData->exporter.reset();
     sessionData->importer.reset();
+    sessionData->reverseExport.clear();
     pullCount = 0;
     aborted = false;
 }
@@ -310,20 +311,42 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
             msg.type = protocol::MessageType::Resolve;
             // Devaluate result for exports/promises; then wrap arrays unless special expression.
             json deval = serialize::devaluateForResult(result, [this, sessionData](bool isPromise, const json& payload) {
-                int id = allocateNegativeExportId(sessionData);
-                ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false;
-                if (isPromise)
+                if (!isPromise)
                 {
-                    e.hasResult = true;
-                    e.result = payload; // Promise resolves to this payload when pulled
+                    // Re-export parity: reuse existing export ID for the canonical local target hook.
+                    auto hook = sessionData->localTargetHook ? sessionData->localTargetHook
+                                                             : makeLocalTargetHook(sessionData->target);
+                    if (!sessionData->localTargetHook) sessionData->localTargetHook = hook;
+                    std::uintptr_t key = reinterpret_cast<std::uintptr_t>(hook.get());
+                    auto it = sessionData->reverseExport.find(key);
+                    if (it != sessionData->reverseExport.end())
+                    {
+                        int existingId = it->second;
+                        if (auto* entry = sessionData->exporter.find(existingId))
+                        {
+                            entry->remoteRefcount += 1;
+                        }
+                        return existingId;
+                    }
+                    int id = allocateNegativeExportId(sessionData);
+                    ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false; e.hasResult = false;
+                    e.callHook = hook;
+                    sessionData->exporter.put(id, e);
+                    sessionData->reverseExport[key] = id;
+                    return id;
                 }
                 else
                 {
-                    e.hasResult = false;
+                    int id = allocateNegativeExportId(sessionData);
+                    ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false;
+                    e.hasResult = true;
+                    e.result = payload; // Promise resolves to this payload when pulled
+                    e.callHook = sessionData->localTargetHook ? sessionData->localTargetHook
+                                                              : makeLocalTargetHook(sessionData->target);
+                    if (!sessionData->localTargetHook) sessionData->localTargetHook = e.callHook;
+                    sessionData->exporter.put(id, e);
+                    return id;
                 }
-                e.callHook = makeLocalTargetHook(sessionData->target);
-                sessionData->exporter.put(id, e);
-                return id;
             });
             if (deval.is_array() && serialize::isSpecialArray(deval))
                 msg.params = json::array({ exportId, deval });
@@ -355,20 +378,41 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
             protocol::Message msg;
             msg.type = protocol::MessageType::Resolve;
             json deval = serialize::devaluateForResult(result, [this, sessionData](bool isPromise, const json& payload) {
-                int id = allocateNegativeExportId(sessionData);
-                ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false;
-                if (isPromise)
+                if (!isPromise)
                 {
-                    e.hasResult = true;
-                    e.result = payload;
+                    auto hook = sessionData->localTargetHook ? sessionData->localTargetHook
+                                                             : makeLocalTargetHook(sessionData->target);
+                    if (!sessionData->localTargetHook) sessionData->localTargetHook = hook;
+                    std::uintptr_t key = reinterpret_cast<std::uintptr_t>(hook.get());
+                    auto it = sessionData->reverseExport.find(key);
+                    if (it != sessionData->reverseExport.end())
+                    {
+                        int existingId = it->second;
+                        if (auto* entry = sessionData->exporter.find(existingId))
+                        {
+                            entry->remoteRefcount += 1;
+                        }
+                        return existingId;
+                    }
+                    int id = allocateNegativeExportId(sessionData);
+                    ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false; e.hasResult = false;
+                    e.callHook = hook;
+                    sessionData->exporter.put(id, e);
+                    sessionData->reverseExport[key] = id;
+                    return id;
                 }
                 else
                 {
-                    e.hasResult = false;
+                    int id = allocateNegativeExportId(sessionData);
+                    ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false;
+                    e.hasResult = true;
+                    e.result = payload;
+                    e.callHook = sessionData->localTargetHook ? sessionData->localTargetHook
+                                                              : makeLocalTargetHook(sessionData->target);
+                    if (!sessionData->localTargetHook) sessionData->localTargetHook = e.callHook;
+                    sessionData->exporter.put(id, e);
+                    return id;
                 }
-                e.callHook = makeLocalTargetHook(sessionData->target);
-                sessionData->exporter.put(id, e);
-                return id;
             });
             if (deval.is_array() && serialize::isSpecialArray(deval))
                 msg.params = json::array({ exportId, deval });
