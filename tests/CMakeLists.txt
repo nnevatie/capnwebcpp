@@ -65,3 +65,14 @@ target_link_libraries(capnwebcpp_tests_remap_captures PRIVATE
 )
 
 add_test(NAME capnwebcpp_tests_remap_captures COMMAND capnwebcpp_tests_remap_captures)
+
+add_executable(capnwebcpp_tests_client_call
+    test_client_call.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_client_call PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_client_call COMMAND capnwebcpp_tests_client_call)

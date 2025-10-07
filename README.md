@@ -25,9 +25,11 @@ Early prototype of a server-side subset of the Cap'n Web protocol. The library c
 | Client stubs/promises in C++ | ❌ | Server-only library |
 | Advanced serialization (capnweb extended types) | ✅ | Supported via sentinel wrappers ($bigint/$date/$bytes/$undefined/$error) |
 | Error redaction hooks | ⚠️ | onSendError hook available on session (API surface TBD) |
-| Abort/onBroken callbacks | ⚠️ | Abort state + onBroken callbacks (internal) |
-| Drain and stats | ⚠️ | isDrained() implemented; getStats() TBD |
+| Abort/onBroken callbacks | ✅ | Send abort frames and propagate onBroken callbacks |
+| Drain and stats | ✅ | drain() + getStats() implemented; batch awaits drain |
 | `map`/`remap` instruction pipeline | ✅ | Supports pipeline/get/value/array/object/nested remap |
+| Remap capture distinction | ✅ | Distinguishes ["import"] vs ["export"] captures |
+| Client-call path for remap exports | ✅ | Calls captured exports via push/pull; forwards resolution to promise |
 | Server-originated exports/promises | ✅ | Emits ["export"/"promise", negId]; promise resolves on pull |
 | Calls to exported stubs | ✅ | Pipelined calls and remap captured calls dispatch to correct target |
 | Tests + CI | ✅ | Unit tests (RPC/protocol/serialize) and Linux/macOS/Windows CI |
@@ -37,6 +39,9 @@ Status icons: ✅ implemented, ⚠️ partial, ❌ not yet implemented
 Ongoing Work
 - Refactoring toward the TS/JS architecture (separating session/core/transport)
 - Improving protocol conformance and resource management
+- Release/refcount parity for re-exports and multi-release
+- MessagePort transport and additional helpers
+- Serialization hardening (depth/keys sanitization) and more cross-compat tests
 
 ## Dependencies
 

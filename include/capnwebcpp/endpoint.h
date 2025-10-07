@@ -31,6 +31,8 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
         {
             auto* userData = ws->getUserData();
             userData->target = target;
+            // Persist a transport for out-of-band sends (client-call path).
+            userData->transport = std::make_shared<UwsWebSocketTransport<decltype(ws)>>(ws);
             session->onOpen(userData);
         },
         .message = [session](auto* ws, std::string_view message, uWS::OpCode)

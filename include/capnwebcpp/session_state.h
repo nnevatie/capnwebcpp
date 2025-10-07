@@ -11,6 +11,7 @@
 
 namespace capnwebcpp
 {
+class RpcTransport;
 
 using json = nlohmann::json;
 
@@ -159,6 +160,11 @@ private:
 class Importer
 {
 public:
+    int allocatePositiveImportId()
+    {
+        return nextImportId++;
+    }
+
     // Record a resolution (resolve/reject) and return how many remote refs to release.
     int recordResolutionAndGetReleaseCount(int importId, const json& resolution)
     {
@@ -181,10 +187,14 @@ public:
     void reset()
     {
         table.clear();
+        nextImportId = 1;
     }
 
     // Back-compat exposure for tests and transitional code.
     std::unordered_map<int, ImportEntry> table;
+
+private:
+    int nextImportId = 1;             // Positive IDs we allocate when initiating calls
 };
 
 // Internal data associated with each connection/session.
@@ -193,6 +203,10 @@ struct RpcSessionData
     Exporter exporter;
     Importer importer;
     std::shared_ptr<RpcTarget> target;
+    std::shared_ptr<RpcTransport> transport; // Optional persistent transport (e.g., WebSocket)
+
+    // Map of our initiated import IDs to server-exported promise IDs for forwarding resolution.
+    std::unordered_map<int, int> importToPromiseExport;
 
     // Back-compat field aliases for existing tests and code paths.
     std::unordered_map<int, ExportEntry>& exports;

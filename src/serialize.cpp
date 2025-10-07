@@ -523,15 +523,25 @@ json Evaluator::evaluateValueWithCaller(const json& value,
                             json resultVal;
                             if (subjectIdx < 0)
                             {
-                                json resolvedArgs = hasArgs ? eval(args) : json::array();
                                 int capIndex = -subjectIdx - 1;
                                 if (capIndex < 0 || capIndex >= (int)capturesVec.size())
                                     throw std::runtime_error("remap capture index out of range");
                                 const Cap& c = capturesVec[capIndex];
-                                if (!c.isImport)
-                                    throw std::runtime_error("remap pipeline on export capture not supported");
-                                int expId = c.id;
-                                resultVal = callExport(expId, path, resolvedArgs);
+                                if (c.isImport)
+                                {
+                                    // Import capture: treat as local dispatch on our main/target.
+                                    json resolvedArgs = hasArgs ? eval(args) : json::array();
+                                    if (!path.is_array() || path.empty() || !path[0].is_string())
+                                        throw std::runtime_error("remap pipeline invalid method path");
+                                    std::string method = path[0].get<std::string>();
+                                    resultVal = dispatch(method, resolvedArgs);
+                                }
+                                else
+                                {
+                                    // Export capture: call back to the peer using client-call path.
+                                    json resolvedArgs = hasArgs ? eval(args) : json::array();
+                                    resultVal = callExport(c.id, path, resolvedArgs);
+                                }
                             }
                             else
                             {
@@ -561,10 +571,15 @@ json Evaluator::evaluateValueWithCaller(const json& value,
                                 if (capIndex < 0 || capIndex >= (int)capturesVec.size())
                                     throw std::runtime_error("remap capture index out of range");
                                 const Cap& c = capturesVec[capIndex];
-                                if (!c.isImport)
+                                if (c.isImport)
+                                {
+                                    resultVal = eval(json::array({"pipeline", c.id, path}));
+                                }
+                                else
+                                {
+                                    // Property get on export capture: not yet supported via client-call path.
                                     throw std::runtime_error("remap get on export capture not supported");
-                                int expId = c.id;
-                                resultVal = eval(json::array({"pipeline", expId, path}));
+                                }
                             }
                             else
                             {

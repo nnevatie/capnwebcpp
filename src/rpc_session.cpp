@@ -1,4 +1,5 @@
 #include "capnwebcpp/rpc_session.h"
+#include "capnwebcpp/transport.h"
 #include "capnwebcpp/protocol.h"
 #include "capnwebcpp/serialize.h"
 #include "capnwebcpp/logging.h"
@@ -64,6 +65,22 @@ std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::st
                 protocol::Message rel;
                 rel.type = protocol::MessageType::Release;
                 rel.params = json::array({ importId, releaseCount });
+                // Forward resolution to linked exported promise, if any.
+                auto itLink = sessionData->importToPromiseExport.find(importId);
+                if (itLink != sessionData->importToPromiseExport.end())
+                {
+                    int promiseExportId = itLink->second;
+                    sessionData->importToPromiseExport.erase(itLink);
+                    if (sessionData->transport)
+                    {
+                        protocol::Message fwd;
+                        fwd.type = (m.type == protocol::MessageType::Resolve)
+                            ? protocol::MessageType::Resolve
+                            : protocol::MessageType::Reject;
+                        fwd.params = json::array({ promiseExportId, m.params[1] });
+                        try { sessionData->transport->send(protocol::serialize(fwd)); } catch (...) {}
+                    }
+                }
                 return protocol::serialize(rel);
             }
             return "";
@@ -189,15 +206,30 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
             };
             auto callExport = [this, sessionData](int exportId, const json& path, const json& args) -> json
             {
-                std::shared_ptr<StubHook> hook = makeLocalTargetHook(sessionData->target);
-                if (auto* it = sessionData->exporter.find(exportId))
-                {
-                    if (it->callHook) hook = it->callHook;
-                }
-                if (!path.is_array() || path.empty() || !path[0].is_string())
-                    throw std::runtime_error("invalid export call path");
-                std::string method = path[0].get<std::string>();
-                return hook->call(method, args);
+                if (!sessionData->transport)
+                    throw std::runtime_error("client call path unavailable: no transport");
+
+                // Allocate an import ID for the result of this call.
+                int callImportId = sessionData->importer.allocatePositiveImportId();
+
+                // Send push to peer to invoke the captured export.
+                json pushExpr = json::array({ "push", json::array({ "pipeline", exportId, path, args }) });
+                sessionData->transport->send(pushExpr.dump());
+
+                // Send pull for our newly allocated import ID so the peer will deliver resolution.
+                json pullExpr = json::array({ "pull", callImportId });
+                sessionData->transport->send(pullExpr.dump());
+
+                // Allocate a negative export ID to represent a promise we export to the peer.
+                int promiseExportId = allocateNegativeExportId(sessionData);
+                ExportEntry promiseEntry; promiseEntry.remoteRefcount = 1; promiseEntry.hasOperation = false; promiseEntry.hasResult = false;
+                sessionData->exporter.put(promiseExportId, promiseEntry);
+
+                // Link the import resolution to this exported promise so we can forward it on arrival.
+                sessionData->importToPromiseExport[callImportId] = promiseExportId;
+
+                // Return a promise expression to embed in the evaluated value tree.
+                return json::array({ "promise", promiseExportId });
             };
 
             entry.hasResult = true;
