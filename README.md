@@ -3,11 +3,11 @@
 
 [Cap'n Web](https://github.com/cloudflare/capnweb) C++ Server Library. This small library allows the user to create server implementations for the Cap'n Web RPC protocol, in delightful C++.
 
-The library does not offer many conveniences - it only supplies the minimal plumbing required for getting messages flying between the RPC client and server.
-
 ## Status
 
-Server-focused implementation of the Cap'n Web RPC protocol with bidirectional calling support. capnwebcpp provides WebSocket and HTTP-batch transports plus a MessagePort adapter, implements remap and a client-call path for server→client calls, and includes serialization hardening and robust lifecycle handling. The library targets server-side usage (no C++ client stubs) and interoperates with the original TypeScript/JavaScript capnweb client.
+Server-focused implementation of the Cap'n Web RPC protocol with bidirectional calling support.
+
+`capnwebcpp` provides WebSocket and HTTP-batch transports plus a MessagePort adapter, implements remap and a client-call path for server→client calls, and includes serialization hardening and robust lifecycle handling. The library targets server-side usage (no C++ client stubs) and interoperates with the original TypeScript/JavaScript `capnweb` client.
 
 | Feature | Status | Notes |
 | --- | --- | --- |
