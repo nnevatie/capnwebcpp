@@ -577,8 +577,8 @@ json Evaluator::evaluateValueWithCaller(const json& value,
                                 }
                                 else
                                 {
-                                    // Property get on export capture: not yet supported via client-call path.
-                                    throw std::runtime_error("remap get on export capture not supported");
+                                    // Export capture: perform property get via client-call path.
+                                    resultVal = callExport(c.id, path, json());
                                 }
                             }
                             else

@@ -71,10 +71,52 @@ static bool testClientCallPathViaRemap()
     return ok;
 }
 
+static bool testClientGetPathViaRemap()
+{
+    std::vector<std::string> outbox;
+    auto transport = std::make_shared<AccumTransport>(outbox);
+
+    RpcSession session(nullptr);
+    RpcSessionData data; data.transport = transport;
+
+    // push remap with captures [["export", 7]] getting property path ["version"] from the captured stub
+    json captures = json::array({ json::array({"export", 7}) });
+    json instrs = json::array({ json::array({"get", -1, json::array({"version"})}) });
+    json push = json::array({ "push", json::array({ "remap", 0, json::array(), captures, instrs }) });
+
+    session.handleMessage(&data, push.dump());
+    // Pull export 1 to get result placeholder (promise)
+    std::string res = session.handleMessage(&data, json::array({"pull", 1}).dump());
+    json msg = parse(res);
+
+    bool ok = true;
+    ok &= require(msg[0] == "resolve" && msg[1] == 1, "client-get: resolve for export 1");
+    ok &= require(msg[2].is_array() && msg[2].size() == 2 && msg[2][0] == "promise", "client-get: payload is promise expr");
+    int promiseId = msg[2][1];
+    ok &= require(promiseId < 0, "client-get: promise export id is negative");
+
+    // Outbox should have two messages: push (pipeline without args) and pull
+    ok &= require(outbox.size() == 2, "client-get: push+pull sent");
+    json m0 = parse(outbox[0]);
+    json m1 = parse(outbox[1]);
+    ok &= require(m0[0] == "push" && m0[1][0] == "pipeline" && m0[1].size() == 3, "client-get: push pipeline without args");
+    ok &= require(m1[0] == "pull" && m1[1] == 1, "client-get: pull importId 1");
+
+    // Simulate client resolution and ensure forwarding to promise.
+    std::string rel = session.handleMessage(&data, json::array({"resolve", 1, json::array({"version","1.2.3"})}).dump());
+    ok &= require(parse(rel) == json::array({"release", 1, 1}), "client-get: release for import 1");
+    ok &= require(outbox.size() == 3, "client-get: forwarded resolve sent");
+    json m2 = parse(outbox[2]);
+    ok &= require(m2[0] == "resolve" && m2[1] == promiseId && m2[2] == json::array({"version","1.2.3"}), "client-get: resolve forwarded");
+
+    return ok;
+}
+
 int main()
 {
     int failed = 0;
     failed += !testClientCallPathViaRemap();
+    failed += !testClientGetPathViaRemap();
     if (failed == 0)
     {
         std::cout << "All client-call path tests passed" << std::endl;

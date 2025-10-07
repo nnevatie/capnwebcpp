@@ -212,8 +212,13 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
                 // Allocate an import ID for the result of this call.
                 int callImportId = sessionData->importer.allocatePositiveImportId();
 
-                // Send push to peer to invoke the captured export.
-                json pushExpr = json::array({ "push", json::array({ "pipeline", exportId, path, args }) });
+                // Build pipeline inner array; omit args when performing a property get.
+                json inner = json::array({ "pipeline", exportId, path });
+                if (!args.is_null())
+                {
+                    inner.push_back(args);
+                }
+                json pushExpr = json::array({ "push", inner });
                 sessionData->transport->send(pushExpr.dump());
 
                 // Send pull for our newly allocated import ID so the peer will deliver resolution.

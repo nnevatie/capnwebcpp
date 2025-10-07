@@ -76,3 +76,14 @@ target_link_libraries(capnwebcpp_tests_client_call PRIVATE
 )
 
 add_test(NAME capnwebcpp_tests_client_call COMMAND capnwebcpp_tests_client_call)
+
+add_executable(capnwebcpp_tests_batch_export_capture_get
+    test_batch_export_capture_get.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_batch_export_capture_get PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_batch_export_capture_get COMMAND capnwebcpp_tests_batch_export_capture_get)
