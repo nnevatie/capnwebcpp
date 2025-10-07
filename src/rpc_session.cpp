@@ -122,6 +122,23 @@ void RpcSession::markAborted(const std::string& reason)
     }
 }
 
+void RpcSession::markAborted(RpcSessionData* sessionData, const std::string& reason)
+{
+    // Mark aborted and notify listeners.
+    markAborted(reason);
+    // Clear microtasks and reset counters.
+    microtasks.clear();
+    pendingMicrotasks = 0;
+    // Best-effort cleanup of session tables and maps.
+    if (sessionData)
+    {
+        sessionData->exporter.reset();
+        sessionData->importer.reset();
+        sessionData->reverseExport.clear();
+        sessionData->importToPromiseExport.clear();
+    }
+}
+
 void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
 {
     if (!pushData.is_array())
@@ -460,15 +477,11 @@ void RpcSession::handleRelease(RpcSessionData* sessionData, int exportId, int re
     sessionData->exporter.release(exportId, refcount);
 }
 
-void RpcSession::handleAbort(RpcSessionData*, const json& errorData)
+void RpcSession::handleAbort(RpcSessionData* sessionData, const json& errorData)
 {
     std::cerr << "Abort received: " << errorData.dump() << std::endl;
-    aborted = true;
     std::string reason = errorData.is_string() ? errorData.get<std::string>() : errorData.dump();
-    for (auto& cb : onBrokenCallbacks)
-    {
-        try { cb(reason); } catch (...) {}
-    }
+    markAborted(sessionData, reason);
 }
 
 } // namespace capnwebcpp

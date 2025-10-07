@@ -120,3 +120,14 @@ target_link_libraries(capnwebcpp_tests_serialize_hardening PRIVATE
 )
 
 add_test(NAME capnwebcpp_tests_serialize_hardening COMMAND capnwebcpp_tests_serialize_hardening)
+
+add_executable(capnwebcpp_tests_transport_abort
+    test_transport_abort.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_transport_abort PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_transport_abort COMMAND capnwebcpp_tests_transport_abort)

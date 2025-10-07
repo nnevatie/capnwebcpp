@@ -22,7 +22,8 @@ public:
 
     void abort(const std::string& /*reason*/) override
     {
-        // No-op for now. Endpoint controls socket lifecycle.
+        // Attempt to close the socket.
+        try { socket->close(); } catch (...) {}
     }
 
 private:
@@ -30,4 +31,3 @@ private:
 };
 
 } // namespace capnwebcpp
-

@@ -55,9 +55,10 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
                     UwsWebSocketTransport<decltype(ws)> transport(ws);
                     auto err = serialize::makeError("ServerError", std::string(e.what()));
                     transport.send(session->buildAbort(err));
+                    transport.abort("server error");
                 }
                 catch (...) {}
-                session->markAborted(std::string(e.what()));
+                session->markAborted(userData, std::string(e.what()));
             }
         },
         .drain = [](auto*)

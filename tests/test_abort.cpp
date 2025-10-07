@@ -44,6 +44,8 @@ static bool testInboundAbortTriggersCallbacks()
     bool ok = true;
     ok &= require(resp.empty(), "abort: no response");
     ok &= require(session.isAborted(), "abort: session marked aborted");
+    // Tables are cleaned up on abort.
+    ok &= require(data.exports.empty() && data.imports.empty(), "abort: tables cleared");
     ok &= require(called, "abort: onBroken callback called");
     try
     {
@@ -87,4 +89,3 @@ int main()
     std::cerr << failed << " abort test(s) failed" << std::endl;
     return 1;
 }
-

@@ -47,6 +47,8 @@ public:
 
     // Mark session aborted locally and notify registered onBroken callbacks.
     void markAborted(const std::string& reason);
+    // Overload with access to sessionData for deeper cleanup (tables, queues).
+    void markAborted(RpcSessionData* sessionData, const std::string& reason);
 
     // ----------------------------------------------------------------------------
     // Parity helpers

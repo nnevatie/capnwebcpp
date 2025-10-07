@@ -27,7 +27,11 @@ inline void pumpMessage(RpcSession& session,
     {
         transport.send(response);
     }
+    if (session.isAborted())
+    {
+        // Best-effort attempt to close the transport after abort.
+        transport.abort("aborted");
+    }
 }
 
 } // namespace capnwebcpp
-
