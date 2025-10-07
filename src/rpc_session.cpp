@@ -278,6 +278,41 @@ RpcSession::RpcStats RpcSession::getStats(const RpcSessionData* sessionData) con
     return s;
 }
 
+int RpcSession::callClient(RpcSessionData* sessionData, int exportId, const json& path, const json& args)
+{
+    if (!sessionData || !sessionData->transport)
+        throw std::runtime_error("server-to-client call requires a persistent transport");
+
+    // Allocate import ID for the call result.
+    int callImportId = sessionData->importer.allocatePositiveImportId();
+
+    // Build pipeline; omit args if null/empty to produce a property get.
+    json inner = json::array({ "pipeline", exportId, path });
+    if (!args.is_null() && !(args.is_array() && args.empty()))
+    {
+        inner.push_back(args);
+    }
+    json pushExpr = json::array({ "push", inner });
+    sessionData->transport->send(pushExpr.dump());
+
+    // Trigger pull so the peer will send resolve/reject for this import.
+    json pullExpr = json::array({ "pull", callImportId });
+    sessionData->transport->send(pullExpr.dump());
+
+    // Create promise export for the peer; link import -> promise for forwarding.
+    int promiseExportId = allocateNegativeExportId(sessionData);
+    ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false; e.hasResult = false;
+    sessionData->exporter.put(promiseExportId, e);
+    sessionData->importToPromiseExport[callImportId] = promiseExportId;
+    return promiseExportId;
+}
+
+int RpcSession::callClientMethod(RpcSessionData* sessionData, int exportId, const std::string& method, const json& argsArray)
+{
+    json path = json::array({ method });
+    return callClient(sessionData, exportId, path, argsArray);
+}
+
 json RpcSession::resolvePipelineReferences(RpcSessionData* sessionData, const json& value)
 {
     auto getResult = [sessionData](int exportId, json& out) -> bool

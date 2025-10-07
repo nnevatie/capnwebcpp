@@ -131,3 +131,14 @@ target_link_libraries(capnwebcpp_tests_transport_abort PRIVATE
 )
 
 add_test(NAME capnwebcpp_tests_transport_abort COMMAND capnwebcpp_tests_transport_abort)
+
+add_executable(capnwebcpp_tests_server_call_api
+    test_server_call_api.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_server_call_api PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_server_call_api COMMAND capnwebcpp_tests_server_call_api)

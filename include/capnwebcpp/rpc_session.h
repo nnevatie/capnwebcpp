@@ -75,6 +75,16 @@ public:
         }
     }
 
+    // ----------------------------------------------------------------------------
+    // Public server-to-client call API
+    // Initiate a call to a client-exported stub (`exportId` from the client's perspective),
+    // identified here by the same numeric ID (as used in remap export captures). The call is
+    // transmitted over the persistent transport as a push followed by an immediate pull of the
+    // newly allocated import ID. Returns a negative export ID for a promise which will be
+    // resolved proactively when the client responds.
+    int callClient(RpcSessionData* sessionData, int exportId, const json& path, const json& args = json());
+    int callClientMethod(RpcSessionData* sessionData, int exportId, const std::string& method, const json& argsArray);
+
 private:
     std::shared_ptr<RpcTarget> target;
 
