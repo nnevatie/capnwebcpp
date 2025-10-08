@@ -3,6 +3,7 @@
 #include <string>
 
 #include "capnwebcpp/rpc_session.h"
+#include "capnwebcpp/protocol.h"
 
 namespace capnwebcpp
 {
@@ -22,6 +23,18 @@ inline void pumpMessage(RpcSession& session,
                         RpcTransport& transport,
                         const std::string& message)
 {
+    int pullExportId = 0;
+    {
+        capnwebcpp::protocol::Message m;
+        if (capnwebcpp::protocol::parse(message, m))
+        {
+            if (m.type == capnwebcpp::protocol::MessageType::Pull && m.params.size() >= 1 && m.params[0].is_number())
+            {
+                pullExportId = m.params[0];
+            }
+        }
+    }
+
     std::string response = session.handleMessage(sessionData, message);
     if (!response.empty())
     {
@@ -31,6 +44,24 @@ inline void pumpMessage(RpcSession& session,
     {
         // Best-effort attempt to close the transport after abort.
         transport.abort("aborted");
+    }
+
+    if (pullExportId != 0 && sessionData)
+    {
+        if (auto* e = sessionData->exporter.find(pullExportId))
+        {
+            for (const auto& kv : e->importedClientIds)
+            {
+                int importId = kv.first;
+                int count = kv.second;
+                if (count <= 0) continue;
+                capnwebcpp::protocol::Message rel;
+                rel.type = capnwebcpp::protocol::MessageType::Release;
+                rel.params = json::array({ importId, count });
+                transport.send(capnwebcpp::protocol::serialize(rel));
+            }
+            e->importedClientIds.clear();
+        }
     }
 }
 

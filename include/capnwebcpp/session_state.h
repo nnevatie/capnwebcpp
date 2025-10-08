@@ -33,6 +33,11 @@ struct ExportEntry
 
     // Hook on which to dispatch calls for this export (for server-originated exports/stubs).
     std::shared_ptr<StubHook> callHook;
+
+    // Imported client references (IDs provided by the client in args/captures) used during this
+    // export's lifetime. Will be released back to the client ("release" frames) when the export
+    // completes (on pull resolution or reject).
+    std::unordered_map<int, int> importedClientIds; // id -> refcount
 };
 
 // Import table entry scaffolding for future inbound exports/promises.

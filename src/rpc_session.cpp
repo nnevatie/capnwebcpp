@@ -174,6 +174,34 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
 
             sessionData->exporter.setOperation(exportId, method, argsArray, callHook);
 
+            // Scan arguments for client-imported refs to release after completion.
+            auto* entry = sessionData->exporter.find(exportId);
+            if (entry)
+            {
+                std::function<void(const json&)> scan = [&](const json& v)
+                {
+                    if (v.is_array())
+                    {
+                        if (!v.empty() && v[0].is_string() && v.size() >= 2 && v[1].is_number_integer())
+                        {
+                            std::string tag = v[0];
+                            if (tag == "export" || tag == "promise")
+                            {
+                                int id = v[1].get<int>();
+                                entry->importedClientIds[id] += 1;
+                                return;
+                            }
+                        }
+                        for (const auto& e : v) scan(e);
+                    }
+                    else if (v.is_object())
+                    {
+                        for (auto it = v.begin(); it != v.end(); ++it) scan(it.value());
+                    }
+                };
+                scan(argsArray);
+            }
+
             // Defer evaluation to microtask queue; transmit still waits for pull.
             int queuedExportId = exportId;
             json queuedArgs = argsArray;
@@ -260,6 +288,24 @@ void RpcSession::handlePush(RpcSessionData* sessionData, const json& pushData)
                 // Return a promise expression to embed in the evaluated value tree.
                 return json::array({ "promise", promiseExportId });
             };
+
+            // Record captured client export refs for release.
+            if (pushData.size() >= 4 && pushData[3].is_array())
+            {
+                const json& captures = pushData[3];
+                for (const auto& cap : captures)
+                {
+                    if (cap.is_array() && cap.size() == 2 && cap[0].is_string() && cap[1].is_number_integer())
+                    {
+                        std::string tag = cap[0];
+                        if (tag == "export")
+                        {
+                            int id = cap[1].get<int>();
+                            entry.importedClientIds[id] += 1;
+                        }
+                    }
+                }
+            }
 
             entry.hasResult = true;
             entry.result = serialize::Evaluator::evaluateValueWithCaller(pushData, getResult, getOperation, dispatch, cache, callExport);
