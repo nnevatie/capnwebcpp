@@ -13,3 +13,13 @@ if (typeof globalThis.self === 'undefined') {
   globalThis.self = globalThis;
 }
 
+// Polyfill Promise.withResolvers for Node versions that lack it (Node < 20/22)
+if (typeof Promise.withResolvers !== 'function') {
+  Promise.withResolvers = function withResolvers() {
+    /** @type {(value: any) => void} */ let resolve;
+    /** @type {(reason?: any) => void} */ let reject;
+    const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+    // @ts-ignore - attachers for consumers
+    return { promise, resolve, reject };
+  };
+}
