@@ -106,6 +106,14 @@ static json devaluateObjectForResult(const json& obj, const std::function<int(bo
             return arr;
         }
 
+        // Client stub import: convert back to ["import", id] when sending to the peer.
+        auto itStub = obj.find("$stub");
+        if (itStub != obj.end() && itStub->is_number_integer())
+        {
+            int id = *itStub;
+            return json::array({ "import", id });
+        }
+
         auto itExp = obj.find("$export");
         if (itExp != obj.end() && itExp->is_boolean() && *itExp)
         {
@@ -424,6 +432,16 @@ json Evaluator::evaluateValue(const json& value,
                         e["stack"] = value[3].get<std::string>();
                     return json{ {"$error", e} };
                 }
+            }
+            else if (tag == "export")
+            {
+                if (value.size() >= 2 && value[1].is_number_integer())
+                    return json{ {"$stub", value[1].get<int>()} };
+            }
+            else if (tag == "promise")
+            {
+                if (value.size() >= 2 && value[1].is_number_integer())
+                    return json{ {"$promise_stub", value[1].get<int>()} };
             }
         }
         if (value.size() >= 2 && value[0].is_string() && value[0] == "pipeline" && value[1].is_number())
