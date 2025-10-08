@@ -195,6 +195,23 @@ public:
         nextImportId = 1;
     }
 
+    // Decrement local references for an import when the peer sends a release targeting an ID we
+    // imported (defensive handling). Erase the entry when localRefcount reaches zero.
+    void releaseLocal(int importId, int count)
+    {
+        auto it = table.find(importId);
+        if (it == table.end()) return;
+        if (count <= 0) return;
+        if (it->second.localRefcount > 0)
+        {
+            it->second.localRefcount -= count;
+            if (it->second.localRefcount <= 0)
+            {
+                table.erase(it);
+            }
+        }
+    }
+
     // Back-compat exposure for tests and transitional code.
     std::unordered_map<int, ImportEntry> table;
 

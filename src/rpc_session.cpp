@@ -90,7 +90,15 @@ std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::st
         case protocol::MessageType::Release:
         {
             if (m.params.size() >= 2 && m.params[0].is_number() && m.params[1].is_number())
-                handleRelease(sessionData, m.params[0], m.params[1]);
+            {
+                int id = m.params[0].get<int>();
+                int count = m.params[1].get<int>();
+                // First, treat as a release of our export (peer released their import of our export).
+                handleRelease(sessionData, id, count);
+                // Defensive: If the ID refers to something we imported from the peer, decrement our
+                // local refs to avoid leaks in case the peer sends such releases.
+                sessionData->importer.releaseLocal(id, count);
+            }
             return "";
         }
         case protocol::MessageType::Abort:
