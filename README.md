@@ -8,35 +8,19 @@
 
 Server-focused implementation of the Cap'n Web RPC protocol with bidirectional calling support.
 
-`capnwebcpp` provides WebSocket and HTTP-batch transports plus a MessagePort adapter, implements remap and a client-call path for server→client calls, and includes serialization hardening and robust lifecycle handling. A minimal C++ HTTP batch client is available; the library interoperates with the original TypeScript/JavaScript `capnweb` client.
+`capnwebcpp` provides WebSocket and HTTP-batch transports plus a MessagePort adapter, implements remap and a client-call path for server→client calls, and includes serialization hardening and robust lifecycle handling. A minimal C++ HTTP batch client and a uWebSockets-based WebSocket client are available; the library interoperates with the original TypeScript/JavaScript `capnweb` client.
 
-| Feature | Status | Notes |
-| --- | --- | --- |
-| WebSocket endpoint | ✅ | uWebSockets-based server endpoint |
-| HTTP-batch endpoint | ✅ | Server-side batch processing via POST; supports export-capture remap (promise placeholders; push/pull frames) |
-| RpcTarget dispatch | ✅ | Method registry with JSON args/return |
-| push/pull/resolve/reject | ✅ | Basic semantics wired end-to-end |
-| Pipelining (property paths) | ✅ | Pipeline eval + property path resolution |
-| Examples interop | ✅ | Helloworld and batch-pipelining with JS clients |
-| Protocol message framing (parse/serialize) | ✅ | MessageType + parser/serializer wired into session |
-| Serialization (JSON + extended types) | ✅ | Array escape; bigint/date/bytes/undefined/error encoding/decoding |
-| Import/export tables + refcounts (neg ID policy) | ✅ | Re-export reuse; remoteRefcount tracked; negative IDs |
-| Release semantics | ✅ | Auto-release on resolve/reject; export release decrements and erases at zero (aggregated supported) |
-| Transport abstraction | ✅ | Interface + uWS/HTTP batch + MessagePort adapters |
-| Client stubs/promises in C++ | ⚠️ | Minimal HTTP batch client + uWebSockets WebSocket client; basic stubs; limited promise handling |
-| Advanced serialization (capnweb extended types) | ✅ | Supported via sentinel wrappers ($bigint/$date/$bytes/$undefined/$error) |
-| Error redaction hooks | ✅ | onSendError hook finalized; applied to reject/abort with shape sanitization |
-| Abort/onBroken callbacks | ✅ | Send abort frames, close transport, cleanup tables, propagate onBroken callbacks |
-| Drain and stats | ✅ | drain() + getStats() implemented; batch awaits drain |
-| `map`/`remap` instruction pipeline | ✅ | Supports pipeline/get/value/array/object/nested remap |
-| Remap capture distinction | ✅ | Distinguishes ["import"] vs ["export"] captures |
-| Client-call path for remap exports | ✅ | Calls captured exports (method/get) via push/pull; forwards resolution to promise |
-| Public server→client call API | ✅ | `callClient()`/`callClientMethod()` for direct server-initiated calls |
-| MessagePort transport | ✅ | In-process MessageChannel + transport adapter |
-| Serialization hardening | ✅ | Depth guards; property path validation; reserved key sanitization |
-| Server-originated exports/promises | ✅ | Emits ["export"/"promise", negId]; promise resolves on pull |
-| Calls to exported stubs | ✅ | Pipelined calls and remap captured calls dispatch to correct target |
-| Tests + CI | ✅ | Unit tests (RPC/protocol/serialize) and Linux/macOS/Windows CI |
+| Area | Status |
+| --- | --- |
+| Core protocol (push/pull/resolve/reject/release/abort) | ✅ |
+| Serialization + hardening | ✅ |
+| Remap / pipelining | ✅ |
+| Transports (WebSocket, HTTP batch, MessagePort) | ✅ |
+| Server→client calls | ✅ |
+| Import/export tables + refcounts | ✅ |
+| Lifecycle (abort, drain, stats) | ✅ |
+| C++ client (HTTP batch + WebSocket) | ⚠️ |
+| Interop & tests | ✅ |
 
 Status icons: ✅ implemented, ⚠️ partial, ❌ not yet implemented
 
