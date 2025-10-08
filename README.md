@@ -2,7 +2,7 @@
 [![CI (Linux • macOS • Windows)](https://img.shields.io/github/actions/workflow/status/nnevatie/capnwebcpp/ci.yml?branch=main&label=CI%20(Linux%20%E2%80%A2%20macOS%20%E2%80%A2%20Windows)&logo=github)](https://github.com/nnevatie/capnwebcpp/actions/workflows/ci.yml)
 [![Interop (Node ↔ capnweb)](https://img.shields.io/github/actions/workflow/status/nnevatie/capnwebcpp/ci.yml?branch=main&label=Interop%20(Node%20%E2%86%94%20capnweb)&logo=github)](https://github.com/nnevatie/capnwebcpp/actions/workflows/ci.yml)
 
-[Cap'n Web](https://github.com/cloudflare/capnweb) C++ Server Library. This small library allows the user to create server implementations for the Cap'n Web RPC protocol, in delightful C++.
+[Cap'n Web](https://github.com/cloudflare/capnweb) C++ library. Build Cap'n Web RPC services in C++ with uWebSockets/WebSocket, HTTP batch, and MessagePort transports, robust serialization and lifecycle handling, plus a minimal C++ client (HTTP batch and WebSocket) for calling Cap'n Web endpoints.
 
 ## Status
 
