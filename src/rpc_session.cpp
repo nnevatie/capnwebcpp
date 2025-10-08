@@ -109,7 +109,13 @@ std::string RpcSession::buildAbort(const json& errorPayload)
 {
     protocol::Message msg;
     msg.type = protocol::MessageType::Abort;
-    msg.params = json::array({ errorPayload });
+    json payload = errorPayload;
+    // Apply error redaction if configured and payload is an error tuple.
+    if (onSendError && payload.is_array() && payload.size() >= 3 && payload[0] == "error")
+    {
+        try { payload = onSendError(payload); } catch (...) {}
+    }
+    msg.params = json::array({ payload });
     return protocol::serialize(msg);
 }
 
@@ -356,7 +362,12 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
         if (result.is_array() && result.size() >= 2 && result[0] == "error")
         {
             msg.type = protocol::MessageType::Reject;
-            msg.params = json::array({ exportId, result });
+            json err = result;
+            if (onSendError)
+            {
+                try { err = onSendError(err); } catch (...) {}
+            }
+            msg.params = json::array({ exportId, err });
         }
         else
         {

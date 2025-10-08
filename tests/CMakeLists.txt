@@ -142,3 +142,14 @@ target_link_libraries(capnwebcpp_tests_server_call_api PRIVATE
 )
 
 add_test(NAME capnwebcpp_tests_server_call_api COMMAND capnwebcpp_tests_server_call_api)
+
+add_executable(capnwebcpp_tests_redaction
+    test_redaction.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_redaction PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_redaction COMMAND capnwebcpp_tests_redaction)
