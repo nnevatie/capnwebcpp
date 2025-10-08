@@ -164,3 +164,14 @@ target_link_libraries(capnwebcpp_tests_import_stub PRIVATE
 )
 
 add_test(NAME capnwebcpp_tests_import_stub COMMAND capnwebcpp_tests_import_stub)
+
+add_executable(capnwebcpp_tests_import_promise
+    test_import_promise.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_import_promise PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_import_promise COMMAND capnwebcpp_tests_import_promise)

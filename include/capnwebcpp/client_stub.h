@@ -41,5 +41,29 @@ inline int getClientStubProperty(RpcSession* session, RpcSessionData* sessionDat
     return session->callClient(sessionData, id, path);
 }
 
-} // namespace capnwebcpp
+inline bool isClientPromiseStub(const json& v)
+{
+    return v.is_object() && v.contains("$promise_stub") && v["$promise_stub"].is_number_integer();
+}
 
+inline int getClientPromiseStubId(const json& v)
+{
+    return isClientPromiseStub(v) ? v["$promise_stub"].get<int>() : 0;
+}
+
+inline int awaitClientPromiseStub(RpcSession* session, RpcSessionData* sessionData, const json& v)
+{
+    int id = getClientPromiseStubId(v);
+    if (id == 0) throw std::runtime_error("not a client promise stub");
+    return session->awaitClientPromise(sessionData, id);
+}
+
+// Convenience: produce a promise expression ["promise", negId] suitable for returning in a
+// server result, by linking the client promise import to a newly-exported negative ID.
+inline json awaitClientPromiseAsResult(RpcSession* session, RpcSessionData* sessionData, const json& v)
+{
+    int negId = awaitClientPromiseStub(session, sessionData, v);
+    return json::array({ "promise", negId });
+}
+
+} // namespace capnwebcpp

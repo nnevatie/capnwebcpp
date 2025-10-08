@@ -319,6 +319,17 @@ int RpcSession::callClientMethod(RpcSessionData* sessionData, int exportId, cons
     return callClient(sessionData, exportId, path, argsArray);
 }
 
+int RpcSession::awaitClientPromise(RpcSessionData* sessionData, int importId)
+{
+    if (!sessionData)
+        throw std::runtime_error("awaitClientPromise: sessionData is null");
+    int promiseExportId = allocateNegativeExportId(sessionData);
+    ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false; e.hasResult = false;
+    sessionData->exporter.put(promiseExportId, e);
+    sessionData->importToPromiseExport[importId] = promiseExportId;
+    return promiseExportId;
+}
+
 json RpcSession::resolvePipelineReferences(RpcSessionData* sessionData, const json& value)
 {
     auto getResult = [sessionData](int exportId, json& out) -> bool

@@ -114,6 +114,14 @@ static json devaluateObjectForResult(const json& obj, const std::function<int(bo
             return json::array({ "import", id });
         }
 
+        // Client promise stub: convert back to ["promise", id]
+        auto itPStub = obj.find("$promise_stub");
+        if (itPStub != obj.end() && itPStub->is_number_integer())
+        {
+            int id = *itPStub;
+            return json::array({ "promise", id });
+        }
+
         auto itExp = obj.find("$export");
         if (itExp != obj.end() && itExp->is_boolean() && *itExp)
         {

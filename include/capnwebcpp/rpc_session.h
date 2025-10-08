@@ -85,6 +85,11 @@ public:
     int callClient(RpcSessionData* sessionData, int exportId, const json& path, const json& args = json());
     int callClientMethod(RpcSessionData* sessionData, int exportId, const std::string& method, const json& argsArray);
 
+    // Link a client-exported promise (importId from our perspective) to a newly-exported
+    // negative promise ID. When a resolve/reject for importId arrives, it will be forwarded to the
+    // returned negative export ID. Does not send any messages; the peer will resolve proactively.
+    int awaitClientPromise(RpcSessionData* sessionData, int importId);
+
 private:
     std::shared_ptr<RpcTarget> target;
 
