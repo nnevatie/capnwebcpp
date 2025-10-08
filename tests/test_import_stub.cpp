@@ -6,6 +6,7 @@
 #include <capnwebcpp/rpc_target.h>
 #include <capnwebcpp/rpc_session.h>
 #include <capnwebcpp/client_stub.h>
+#include <capnwebcpp/transports/accum_transport.h>
 
 using json = nlohmann::json;
 using namespace capnwebcpp;
@@ -65,10 +66,36 @@ static bool testImportStubReturnMapping()
     return ok;
 }
 
+static bool testImportStubCallEmission()
+{
+    std::vector<std::string> outbox;
+    auto transport = std::make_shared<capnwebcpp::AccumTransport>(outbox);
+
+    RpcSession session(nullptr);
+    RpcSessionData data;
+    auto target = std::make_shared<StubEchoTarget>(&session, &data);
+    data.target = target;
+    data.transport = transport;
+
+    // push: callStub(["export", 5])
+    session.handleMessage(&data, json::array({"push", json::array({"pipeline", 0, json::array({"callStub"}), json::array({ json::array({"export", 5}) })})}).dump());
+    // pull triggers execution and microtasks
+    (void)session.handleMessage(&data, json::array({"pull", 1}).dump());
+
+    bool ok = true;
+    ok &= require(outbox.size() == 2, "import stub call: push+pull sent to client");
+    auto m0 = parse(outbox[0]);
+    auto m1 = parse(outbox[1]);
+    ok &= require(m0[0] == "push" && m0[1][0] == "pipeline" && m0[1][1] == 5, "import stub call: pipeline to exportId 5");
+    ok &= require(m1[0] == "pull" && m1[1] == 1, "import stub call: pull importId 1");
+    return ok;
+}
+
 int main()
 {
     int failed = 0;
     failed += !testImportStubReturnMapping();
+    failed += !testImportStubCallEmission();
     if (failed == 0)
     {
         std::cout << "All import stub tests passed" << std::endl;
@@ -77,4 +104,3 @@ int main()
     std::cerr << failed << " import stub test(s) failed" << std::endl;
     return 1;
 }
-
