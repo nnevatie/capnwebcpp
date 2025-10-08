@@ -52,3 +52,32 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+
+  interop:
+    name: Interop (Node ↔ capnweb)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure (CMake)
+        run: |
+          cmake -S . -B build -DCMAKE_CXX_STANDARD=20 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build examples
+        run: cmake --build build --config Release --parallel
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install interop dependencies
+        working-directory: interop
+        run: npm ci
+
+      - name: Run interop tests
+        working-directory: interop
+        env:
+          FORCE_COLOR: 1
+        run: npm test
