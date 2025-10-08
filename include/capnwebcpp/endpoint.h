@@ -105,14 +105,16 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
                     // Accumulate all outbound messages using a transport adapter, to match capnweb's
                     // batch semantics where the server returns all responses at once after drain().
                     std::vector<std::string> outbox;
-                    AccumTransport transport(outbox);
+                    auto transportPtr = std::make_shared<AccumTransport>(outbox);
+                    // Make the transport available to the session (for remap export-capture calls).
+                    sessionData.transport = transportPtr;
 
                     std::istringstream stream(body);
                     std::string line;
                     while (std::getline(stream, line))
                     {
                         if (line.empty()) continue;
-                        pumpMessage(sessionLocal, &sessionData, transport, line);
+                        pumpMessage(sessionLocal, &sessionData, *transportPtr, line);
                         sessionLocal.processTasks();
                     }
 

@@ -6,14 +6,20 @@
 
 #include "capnwebcpp/rpc_session.h"
 #include "capnwebcpp/logging.h"
+#include "capnwebcpp/transport.h"
+#include "capnwebcpp/transports/accum_transport.h"
 
 namespace capnwebcpp
 {
 
-// Process a newline-delimited batch body and return newline-delimited responses.
+// Process a newline-delimited batch body using an accumulating transport.
+// Returns all outbound messages (responses and any server->client frames) in send order.
 inline std::vector<std::string> processBatch(RpcSession& session, RpcSessionData* sessionData, const std::string& body)
 {
-    std::vector<std::string> responses;
+    std::vector<std::string> outbox;
+    auto transportPtr = std::make_shared<AccumTransport>(outbox);
+    if (sessionData) sessionData->transport = transportPtr;
+
     std::istringstream stream(body);
     std::string line;
     while (std::getline(stream, line))
@@ -21,18 +27,15 @@ inline std::vector<std::string> processBatch(RpcSession& session, RpcSessionData
         if (!line.empty())
         {
             debugLog(std::string("batch line: ") + line);
-            std::string response = session.handleMessage(sessionData, line);
+            pumpMessage(session, sessionData, *transportPtr, line);
             // After each message, run microtasks (simulate microtask queue).
             session.processTasks();
-            if (!response.empty())
-            {
-                debugLog(std::string("batch response: ") + response);
-                responses.push_back(response);
-            }
         }
     }
-    debugLog(std::string("batch done, responses=") + std::to_string(responses.size()));
-    return responses;
+    // Drain any remaining queued tasks before returning accumulated messages.
+    session.drain(sessionData);
+    debugLog(std::string("batch done, outbox=") + std::to_string(outbox.size()));
+    return outbox;
 }
 
 } // namespace capnwebcpp
