@@ -215,8 +215,10 @@ struct RpcSessionData
 
     // Canonical local call hook for the server target; used to re-export stubs consistently.
     std::shared_ptr<StubHook> localTargetHook;
-    // Reverse export map: hook identity -> export ID (for re-export parity).
-    std::unordered_map<std::uintptr_t, int> reverseExport;
+    // Reverse export map: target instance pointer -> export ID (for per-target re-export parity).
+    std::unordered_map<std::uintptr_t, int> targetExportId;
+    // Registry of server target instances referenced by export markers.
+    std::unordered_map<std::uintptr_t, std::shared_ptr<RpcTarget>> targetRegistry;
 
     // Back-compat field aliases for existing tests and code paths.
     std::unordered_map<int, ExportEntry>& exports;

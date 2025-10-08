@@ -15,7 +15,8 @@ void RpcSession::onOpen(RpcSessionData* sessionData)
     std::cout << "WebSocket connection opened" << std::endl;
     sessionData->exporter.reset();
     sessionData->importer.reset();
-    sessionData->reverseExport.clear();
+    sessionData->targetExportId.clear();
+    sessionData->targetRegistry.clear();
     pullCount = 0;
     aborted = false;
 }
@@ -140,7 +141,8 @@ void RpcSession::markAborted(RpcSessionData* sessionData, const std::string& rea
     {
         sessionData->exporter.reset();
         sessionData->importer.reset();
-        sessionData->reverseExport.clear();
+        sessionData->targetExportId.clear();
+        sessionData->targetRegistry.clear();
         sessionData->importToPromiseExport.clear();
     }
 }
@@ -433,26 +435,51 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
             json deval = serialize::devaluateForResult(result, [this, sessionData](bool isPromise, const json& payload) {
                 if (!isPromise)
                 {
-                    // Re-export parity: reuse existing export ID for the canonical local target hook.
+                    // Handle per-target export identity when provided via payload meta.
+                    if (payload.is_object() && payload.contains("$export_target_ptr") &&
+                        (payload["$export_target_ptr"].is_number_integer() || payload["$export_target_ptr"].is_number_unsigned()))
+                    {
+                        std::uintptr_t tptr = payload["$export_target_ptr"].get<std::uintptr_t>();
+                        // Reuse existing negative ID if present.
+                        auto itId = sessionData->targetExportId.find(tptr);
+                        if (itId != sessionData->targetExportId.end())
+                        {
+                            int existingId = itId->second;
+                            if (auto* entry = sessionData->exporter.find(existingId))
+                            {
+                                entry->remoteRefcount += 1;
+                            }
+                            return existingId;
+                        }
+                        // Allocate new negative ID and bind to this target's hook.
+                        int id = allocateNegativeExportId(sessionData);
+                        ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false; e.hasResult = false;
+                        std::shared_ptr<RpcTarget> tgt;
+                        auto itT = sessionData->targetRegistry.find(tptr);
+                        if (itT != sessionData->targetRegistry.end()) tgt = itT->second;
+                        if (!tgt) tgt = sessionData->target; // fallback to main target
+                        e.callHook = makeLocalTargetHook(tgt);
+                        sessionData->exporter.put(id, e);
+                        sessionData->targetExportId[tptr] = id;
+                        return id;
+                    }
+                    // Default: use canonical main target hook and reuse across exports of main.
                     auto hook = sessionData->localTargetHook ? sessionData->localTargetHook
                                                              : makeLocalTargetHook(sessionData->target);
                     if (!sessionData->localTargetHook) sessionData->localTargetHook = hook;
-                    std::uintptr_t key = reinterpret_cast<std::uintptr_t>(hook.get());
-                    auto it = sessionData->reverseExport.find(key);
-                    if (it != sessionData->reverseExport.end())
+                    std::uintptr_t tptr = reinterpret_cast<std::uintptr_t>(sessionData->target.get());
+                    auto itId = sessionData->targetExportId.find(tptr);
+                    if (itId != sessionData->targetExportId.end())
                     {
-                        int existingId = it->second;
-                        if (auto* entry = sessionData->exporter.find(existingId))
-                        {
-                            entry->remoteRefcount += 1;
-                        }
+                        int existingId = itId->second;
+                        if (auto* entry = sessionData->exporter.find(existingId)) entry->remoteRefcount += 1;
                         return existingId;
                     }
                     int id = allocateNegativeExportId(sessionData);
                     ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false; e.hasResult = false;
                     e.callHook = hook;
                     sessionData->exporter.put(id, e);
-                    sessionData->reverseExport[key] = id;
+                    sessionData->targetExportId[tptr] = id;
                     return id;
                 }
                 else
@@ -500,25 +527,44 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
             json deval = serialize::devaluateForResult(result, [this, sessionData](bool isPromise, const json& payload) {
                 if (!isPromise)
                 {
+                    if (payload.is_object() && payload.contains("$export_target_ptr") &&
+                        (payload["$export_target_ptr"].is_number_integer() || payload["$export_target_ptr"].is_number_unsigned()))
+                    {
+                        std::uintptr_t tptr = payload["$export_target_ptr"].get<std::uintptr_t>();
+                        auto itId = sessionData->targetExportId.find(tptr);
+                        if (itId != sessionData->targetExportId.end())
+                        {
+                            int existingId = itId->second;
+                            if (auto* entry = sessionData->exporter.find(existingId)) entry->remoteRefcount += 1;
+                            return existingId;
+                        }
+                        int id = allocateNegativeExportId(sessionData);
+                        ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false; e.hasResult = false;
+                        std::shared_ptr<RpcTarget> tgt;
+                        auto itT = sessionData->targetRegistry.find(tptr);
+                        if (itT != sessionData->targetRegistry.end()) tgt = itT->second;
+                        if (!tgt) tgt = sessionData->target;
+                        e.callHook = makeLocalTargetHook(tgt);
+                        sessionData->exporter.put(id, e);
+                        sessionData->targetExportId[tptr] = id;
+                        return id;
+                    }
                     auto hook = sessionData->localTargetHook ? sessionData->localTargetHook
                                                              : makeLocalTargetHook(sessionData->target);
                     if (!sessionData->localTargetHook) sessionData->localTargetHook = hook;
-                    std::uintptr_t key = reinterpret_cast<std::uintptr_t>(hook.get());
-                    auto it = sessionData->reverseExport.find(key);
-                    if (it != sessionData->reverseExport.end())
+                    std::uintptr_t tptr = reinterpret_cast<std::uintptr_t>(sessionData->target.get());
+                    auto itId = sessionData->targetExportId.find(tptr);
+                    if (itId != sessionData->targetExportId.end())
                     {
-                        int existingId = it->second;
-                        if (auto* entry = sessionData->exporter.find(existingId))
-                        {
-                            entry->remoteRefcount += 1;
-                        }
+                        int existingId = itId->second;
+                        if (auto* entry = sessionData->exporter.find(existingId)) entry->remoteRefcount += 1;
                         return existingId;
                     }
                     int id = allocateNegativeExportId(sessionData);
                     ExportEntry e; e.remoteRefcount = 1; e.hasOperation = false; e.hasResult = false;
                     e.callHook = hook;
                     sessionData->exporter.put(id, e);
-                    sessionData->reverseExport[key] = id;
+                    sessionData->targetExportId[tptr] = id;
                     return id;
                 }
                 else

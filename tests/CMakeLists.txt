@@ -175,3 +175,14 @@ target_link_libraries(capnwebcpp_tests_import_promise PRIVATE
 )
 
 add_test(NAME capnwebcpp_tests_import_promise COMMAND capnwebcpp_tests_import_promise)
+
+add_executable(capnwebcpp_tests_reexport_multi
+    test_reexport_multi.cpp
+)
+
+target_link_libraries(capnwebcpp_tests_reexport_multi PRIVATE
+    capnwebcpp
+    nlohmann_json::nlohmann_json
+)
+
+add_test(NAME capnwebcpp_tests_reexport_multi COMMAND capnwebcpp_tests_reexport_multi)

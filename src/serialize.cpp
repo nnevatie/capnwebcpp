@@ -122,10 +122,19 @@ static json devaluateObjectForResult(const json& obj, const std::function<int(bo
             return json::array({ "promise", id });
         }
 
+        // Direct export marker (no target instance specified)
         auto itExp = obj.find("$export");
         if (itExp != obj.end() && itExp->is_boolean() && *itExp)
         {
             int id = newExportId(false, json());
+            return json::array({ "export", id });
+        }
+        // Export a specific server target instance (per-target identity)
+        auto itExpT = obj.find("$export_target_ptr");
+        if (itExpT != obj.end() && (itExpT->is_number_integer() || itExpT->is_number_unsigned()))
+        {
+            json payload = json::object({ {"$export_target_ptr", *itExpT} });
+            int id = newExportId(false, payload);
             return json::array({ "export", id });
         }
         auto itProm = obj.find("$promise");
