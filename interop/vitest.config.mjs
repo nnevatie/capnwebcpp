@@ -1,7 +1,7 @@
 export default {
   test: {
     globals: true,
-    setupFiles: [],
+    setupFiles: ['./test/setup.mjs'],
     hookTimeout: 30000,
     testTimeout: 30000,
     reporters: ["default"],
@@ -13,4 +13,3 @@ export default {
     maxThreads: 1,
   },
 };
-
