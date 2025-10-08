@@ -72,7 +72,7 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
     });
 
     // HTTP POST endpoint for batch RPC.
-    app.post(path, [session, target](auto* res, auto*)
+    app.post(path, [target](auto* res, auto*)
     {
         std::string body;
 
@@ -81,7 +81,7 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
             std::cerr << "HTTP request aborted" << std::endl;
         });
 
-        res->onData([res, session, target, body = std::move(body)](std::string_view data, bool isEnd) mutable
+        res->onData([res, target, body = std::move(body)](std::string_view data, bool isEnd) mutable
         {
             body.append(data);
 
@@ -89,24 +89,40 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
             {
                 try
                 {
+                    // Use a fresh session per HTTP batch to avoid cross-request state.
+                    RpcSession sessionLocal(target);
                     RpcSessionData sessionData;
                     sessionData.target = target;
                     sessionData.exporter.reset();
 
-                    std::vector<std::string> responses = processBatch(*session, &sessionData, body);
+                    // Accumulate all outbound messages using a transport adapter, to match capnweb's
+                    // batch semantics where the server returns all responses at once after drain().
+                    std::vector<std::string> outbox;
+                    AccumTransport transport(outbox);
+
+                    std::istringstream stream(body);
+                    std::string line;
+                    while (std::getline(stream, line))
+                    {
+                        if (line.empty()) continue;
+                        pumpMessage(sessionLocal, &sessionData, transport, line);
+                        sessionLocal.processTasks();
+                    }
+
+                    // Ensure the session has drained outstanding pulls before ending; then return
+                    // all accumulated messages as newline-delimited body.
+                    sessionLocal.drain(&sessionData);
 
                     res->writeHeader("Content-Type", "text/plain");
                     res->writeHeader("Access-Control-Allow-Origin", "*");
 
                     std::string responseBody;
-                    for (size_t i = 0; i < responses.size(); ++i)
+                    for (size_t i = 0; i < outbox.size(); ++i)
                     {
                         if (i > 0) responseBody += "\n";
-                        responseBody += responses[i];
+                        responseBody += outbox[i];
                     }
 
-                    // Ensure the session has drained outstanding pulls before ending.
-                    session->drain(&sessionData);
                     res->end(responseBody);
                 }
                 catch (const std::exception& e)

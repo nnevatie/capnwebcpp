@@ -80,3 +80,14 @@ examples\batch-pipelining\batch-pipelining ..
 ```
 Open a [batch-pipelining](http://localhost:8000/static/examples/batch-pipelining/index.html) in a browser.
 
+### MessagePort (in-process)
+```
+examples\\messageport\\messageport ..
+```
+This example uses an in-process MessageChannel to simulate client/server over a MessagePort transport.
+
+### WebSocket Callback (server→client calls)
+```
+examples\\websocket-callback\\websocket-callback ..
+```
+Open a [WebSocket callback client](http://localhost:8000/static/examples/websocket-callback/index.html) in a browser. The server calls back to the client’s RPC target using the server→client call API.

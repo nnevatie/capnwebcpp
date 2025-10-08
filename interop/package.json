@@ -1,0 +1,14 @@
+{
+  "name": "capnwebcpp-interop",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "capnweb": "^0.1.0",
+    "vitest": "^1.6.0",
+    "ws": "^8.17.0"
+  },
+  "scripts": {
+    "test": "vitest run --reporter=verbose"
+  }
+}
+

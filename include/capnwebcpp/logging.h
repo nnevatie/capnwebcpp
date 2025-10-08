@@ -19,7 +19,6 @@ inline bool debugEnabled()
 }
 
 inline void debugLog(const std::string& msg)
-
 {
     if (debugEnabled())
     {
