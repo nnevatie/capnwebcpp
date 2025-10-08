@@ -8,7 +8,7 @@
 
 #include <capnwebcpp/rpc_target.h>
 #include <capnwebcpp/rpc_session.h>
-#include <capnwebcpp/file_service.h>
+#include <capnwebcpp/file_endpoint.h>
 #include <capnwebcpp/transports/uws_websocket_transport.h>
 
 using json = nlohmann::json;
@@ -124,4 +124,3 @@ int main(int argc, char** argv)
     }
     return 0;
 }
-

@@ -2,8 +2,8 @@
 #include <vector>
 
 #include <capnwebcpp/rpc_target.h>
-#include <capnwebcpp/endpoint.h>
-#include <capnwebcpp/file_service.h>
+#include <capnwebcpp/rpc_endpoint.h>
+#include <capnwebcpp/file_endpoint.h>
 
 using namespace capnwebcpp;
 
