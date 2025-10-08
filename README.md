@@ -57,8 +57,6 @@ Ongoing Work
 
 ## Building (with Ninja)
 
-Building the library has only been tested on MSVC 2022, so far.
-
 ```
 git clone https://github.com/nnevatie/capnwebcpp.git
 cd capnwebcpp
