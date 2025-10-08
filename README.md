@@ -92,3 +92,27 @@ This example uses an in-process MessageChannel to simulate client/server over a 
 examples\\websocket-callback\\websocket-callback ..
 ```
 Open a [WebSocket callback client](http://localhost:8000/static/examples/websocket-callback/index.html) in a browser. The server calls back to the client’s RPC target using the server→client call API.
+
+## C++ Client (HTTP Batch)
+
+Use the minimal batch client to call a remote server from C++. Provide a transport function that takes outbound frames and returns the server’s responses.
+
+Example:
+
+```
+#include <capnwebcpp/client_api.h>
+
+using namespace capnwebcpp;
+
+// Implement this to POST batch.join("\n") to your server and split("\n") the response.
+std::vector<std::string> sendBatch(const std::vector<std::string>& batch);
+
+int main() {
+    auto transport = std::make_shared<FuncBatchTransport>(sendBatch);
+    RpcClient client(transport);
+    auto result = client.callMethod("hello", nlohmann::json::array({"World"}));
+    // result == "Hello, World!"
+}
+```
+
+Stub results can be called using `callStubMethod()` / `getStubProperty()` with the returned `{ "$stub": id }`.
