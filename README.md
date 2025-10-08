@@ -25,12 +25,12 @@ Server-focused implementation of the Cap'n Web RPC protocol with bidirectional c
 Status icons: ✅ implemented, ⚠️ partial, ❌ not yet implemented
 
 Ongoing Work
-- Public API polish: diagnostics (stats/logging)
-- Workers/Node convenience helpers and transport adapters
-- Cross-interop and fuzz tests against capnweb
-- Performance: microtask scheduling and pipeline caching
-- Documentation: batch-mode limitations and server→client examples
-- Expand C++ client: WebSocket transport, stub lifecycle/release, promise awaiting
+- Diagnostics/logging: richer stats, tracing hooks
+- C++ client: async API, stub lifecycle/release, promise awaiting/pipelining, wss/TLS, reconnection
+- Additional adapters: Workers/Node helpers and transports
+- Interop: broader coverage and fuzz tests against capnweb
+- Performance: microtask scheduling, caching, event-loop integration
+- Docs: client usage (batch/WS), wss setup, batch caveats, server→client examples
 
 ## Dependencies
 
