@@ -50,6 +50,9 @@ public:
     // Overload with access to sessionData for deeper cleanup (tables, queues).
     void markAborted(RpcSessionData* sessionData, const std::string& reason);
 
+    // Emit release frames for any imported client refs associated with outstanding exports.
+    void emitPendingReleases(RpcSessionData* sessionData, RpcTransport& transport);
+
     // ----------------------------------------------------------------------------
     // Parity helpers
 

@@ -26,6 +26,28 @@ void RpcSession::onClose(RpcSessionData*)
     std::cout << "WebSocket connection closed" << std::endl;
 }
 
+void RpcSession::emitPendingReleases(RpcSessionData* sessionData, RpcTransport& transport)
+{
+    if (!sessionData) return;
+    for (auto& kv : sessionData->exporter.table)
+    {
+        int exportId = kv.first;
+        ExportEntry& e = kv.second;
+        (void)exportId;
+        for (const auto& imp : e.importedClientIds)
+        {
+            int importId = imp.first;
+            int count = imp.second;
+            if (count <= 0) continue;
+            protocol::Message rel;
+            rel.type = protocol::MessageType::Release;
+            rel.params = json::array({ importId, count });
+            try { transport.send(protocol::serialize(rel)); } catch (...) {}
+        }
+        e.importedClientIds.clear();
+    }
+}
+
 std::string RpcSession::handleMessage(RpcSessionData* sessionData, const std::string& message)
 {
     if (aborted)

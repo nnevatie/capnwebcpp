@@ -67,6 +67,13 @@ void setupRpcEndpoint(App& app, const std::string& path, std::shared_ptr<RpcTarg
         .close = [session](auto* ws, int, std::string_view)
         {
             auto* userData = ws->getUserData();
+            // Best-effort: emit pending releases before closing.
+            try
+            {
+                UwsWebSocketTransport<decltype(ws)> transport(ws);
+                session->emitPendingReleases(userData, transport);
+            }
+            catch (...) {}
             session->onClose(userData);
         }
     });
