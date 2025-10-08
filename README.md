@@ -23,7 +23,7 @@ Server-focused implementation of the Cap'n Web RPC protocol with bidirectional c
 | Import/export tables + refcounts (neg ID policy) | ✅ | Re-export reuse; remoteRefcount tracked; negative IDs |
 | Release semantics | ✅ | Auto-release on resolve/reject; export release decrements and erases at zero (aggregated supported) |
 | Transport abstraction | ✅ | Interface + uWS/HTTP batch + MessagePort adapters |
-| Client stubs/promises in C++ | ⚠️ | Minimal HTTP batch client; basic stubs; no WS; limited promise handling |
+| Client stubs/promises in C++ | ⚠️ | Minimal HTTP batch client + uWebSockets WebSocket client; basic stubs; limited promise handling |
 | Advanced serialization (capnweb extended types) | ✅ | Supported via sentinel wrappers ($bigint/$date/$bytes/$undefined/$error) |
 | Error redaction hooks | ✅ | onSendError hook finalized; applied to reject/abort with shape sanitization |
 | Abort/onBroken callbacks | ✅ | Send abort frames, close transport, cleanup tables, propagate onBroken callbacks |
@@ -115,3 +115,21 @@ int main() {
 ```
 
 Stub results can be called using `callStubMethod()` / `getStubProperty()` with the returned `{ "$stub": id }`.
+
+### C++ Client (WebSocket, persistent)
+
+Use the uWebSockets-based persistent client to keep a WebSocket open and issue multiple calls:
+
+```
+#include <capnwebcpp/client_ws.h>
+
+using namespace capnwebcpp;
+
+int main() {
+    RpcWsClient client("ws://127.0.0.1:8000/api");
+    auto res = client.callMethod("hello", nlohmann::json::array({"World"}));
+    // res == "Hello, World!"
+}
+```
+
+Note: Current client is synchronous and sends a `release` after each resolve. Advanced features (promise awaiting, batched pipelining, bidirectional callbacks) are limited and will be expanded.
