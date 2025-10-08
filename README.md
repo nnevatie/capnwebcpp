@@ -25,7 +25,7 @@ Server-focused implementation of the Cap'n Web RPC protocol with bidirectional c
 | Transport abstraction | ✅ | Interface + uWS/HTTP batch + MessagePort adapters |
 | Client stubs/promises in C++ | ❌ | Server-only library |
 | Advanced serialization (capnweb extended types) | ✅ | Supported via sentinel wrappers ($bigint/$date/$bytes/$undefined/$error) |
-| Error redaction hooks | ⚠️ | onSendError hook available on session (API surface TBD) |
+| Error redaction hooks | ✅ | onSendError hook finalized; applied to reject/abort with shape sanitization |
 | Abort/onBroken callbacks | ✅ | Send abort frames, close transport, cleanup tables, propagate onBroken callbacks |
 | Drain and stats | ✅ | drain() + getStats() implemented; batch awaits drain |
 | `map`/`remap` instruction pipeline | ✅ | Supports pipeline/get/value/array/object/nested remap |
@@ -41,7 +41,7 @@ Server-focused implementation of the Cap'n Web RPC protocol with bidirectional c
 Status icons: ✅ implemented, ⚠️ partial, ❌ not yet implemented
 
 Ongoing Work
-- Public API polish: error redaction (onSendError) contract, diagnostics (stats/logging)
+- Public API polish: diagnostics (stats/logging)
 - Multi-target re-export identity (stable IDs per target instance)
 - Workers/Node convenience helpers and transport adapters
 - Cross-interop and fuzz tests against capnweb

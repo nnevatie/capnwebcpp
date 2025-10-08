@@ -24,7 +24,13 @@ class RpcSession
 {
 public:
     explicit RpcSession(std::shared_ptr<RpcTarget> target) : target(target) {}
-    // Optional: rewrite error tuple before sending (e.g., redaction)
+    // Optional: rewrite error tuples before sending (e.g., redaction).
+    // Contract:
+    // - The callback receives an error tuple of the form ["error", name, message, optional stack].
+    // - It may return a rewritten tuple. If the return value is malformed, a sanitized
+    //   ["error", string name, string message, optional string stack] is sent.
+    // - Applied to outbound reject frames produced by the server and to abort payloads.
+    // - Not applied when merely forwarding a peer-provided reject (e.g., forwarded client errors).
     void setOnSendError(std::function<json(const json&)> cb) { onSendError = std::move(cb); }
 
     // Handle incoming message; returns a response (possibly empty).
@@ -136,6 +142,43 @@ private:
     int allocateNegativeExportId(RpcSessionData* sessionData)
     {
         return sessionData->exporter.allocateNegativeExportId();
+    }
+
+    // Apply the configured redaction callback to an error tuple and sanitize shape.
+    json redactError(const json& err)
+    {
+        // Only handle tuples of the form ["error", name, message, optional stack]
+        if (!err.is_array() || err.size() < 3 || !err[0].is_string() || err[0] != "error")
+            return err;
+
+        auto sanitize = [](const json& in) -> json
+        {
+            if (!in.is_array() || in.size() < 3) return json::array({ "error", "Error", "(redacted)" });
+            json out = json::array();
+            out.push_back("error");
+            // name
+            if (in.size() >= 2 && in[1].is_string()) out.push_back(in[1]);
+            else out.push_back("Error");
+            // message
+            if (in.size() >= 3 && in[2].is_string()) out.push_back(in[2]);
+            else out.push_back("(redacted)");
+            // optional stack
+            if (in.size() >= 4 && in[3].is_string()) out.push_back(in[3]);
+            return out;
+        };
+
+        if (!onSendError)
+            return sanitize(err);
+
+        try
+        {
+            json rewritten = onSendError(err);
+            return sanitize(rewritten);
+        }
+        catch (...)
+        {
+            return sanitize(err);
+        }
     }
 };
 

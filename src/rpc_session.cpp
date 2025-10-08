@@ -141,10 +141,10 @@ std::string RpcSession::buildAbort(const json& errorPayload)
     protocol::Message msg;
     msg.type = protocol::MessageType::Abort;
     json payload = errorPayload;
-    // Apply error redaction if configured and payload is an error tuple.
-    if (onSendError && payload.is_array() && payload.size() >= 3 && payload[0] == "error")
+    // Apply error redaction if payload is an error tuple.
+    if (payload.is_array() && payload.size() >= 3 && payload[0] == "error")
     {
-        try { payload = onSendError(payload); } catch (...) {}
+        payload = redactError(payload);
     }
     msg.params = json::array({ payload });
     return protocol::serialize(msg);
@@ -451,11 +451,7 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
         if (result.is_array() && result.size() >= 2 && result[0] == "error")
         {
             msg.type = protocol::MessageType::Reject;
-            json err = result;
-            if (onSendError)
-            {
-                try { err = onSendError(err); } catch (...) {}
-            }
+            json err = redactError(result);
             msg.params = json::array({ exportId, err });
         }
         else
@@ -624,9 +620,7 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
             itExp->args = json();
             protocol::Message msg;
             msg.type = protocol::MessageType::Reject;
-            json err = serialize::makeError("MethodError", std::string(e.what()));
-            if (onSendError)
-                err = onSendError(err);
+            json err = redactError(serialize::makeError("MethodError", std::string(e.what())));
             msg.params = json::array({ exportId, err });
             return msg;
         }
@@ -636,9 +630,7 @@ protocol::Message RpcSession::handlePull(RpcSessionData* sessionData, int export
         protocol::Message msg;
         msg.type = protocol::MessageType::Reject;
         {
-            json err = serialize::makeError("ExportNotFound", "Export ID not found");
-            if (onSendError)
-                err = onSendError(err);
+            json err = redactError(serialize::makeError("ExportNotFound", "Export ID not found"));
             msg.params = json::array({ exportId, err });
         }
         return msg;
