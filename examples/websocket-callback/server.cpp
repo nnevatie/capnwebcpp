@@ -9,6 +9,7 @@
 #include <capnwebcpp/rpc_target.h>
 #include <capnwebcpp/rpc_session.h>
 #include <capnwebcpp/file_endpoint.h>
+#include <capnwebcpp/export_id.h>
 #include <capnwebcpp/transports/uws_websocket_transport.h>
 
 using json = nlohmann::json;
@@ -31,19 +32,13 @@ public:
         {
             if (!session || !data)
                 return json({{"error","no session"}});
-            if (!args.is_array() || args.empty() || !args[0].is_array() || args[0].size() < 2)
+            if (!args.is_array() || args.empty())
                 return json({{"error","invalid args"}});
 
-            int clientExportId = -1;
-            const json& cap = args[0];
-            if (cap[0] == "export" && cap[1].is_number_integer())
-            {
-                clientExportId = cap[1].get<int>();
-            }
-            else
-            {
-                return json({{"error","expected export tuple"}});
-            }
+            auto id = extractExportId(args[0]);
+            if (!id)
+                return json({{"error","expected export or stub"}});
+            int clientExportId = *id;
 
             // Call client method greet(name) and also perform a get for version.
             try
