@@ -8,12 +8,12 @@
 
 Server-focused implementation of the Cap'n Web RPC protocol with bidirectional calling support.
 
-`capnwebcpp` provides WebSocket and HTTP-batch transports plus a MessagePort adapter, implements remap and a client-call path for server→client calls, and includes serialization hardening and robust lifecycle handling. The library targets server-side usage (no C++ client stubs) and interoperates with the original TypeScript/JavaScript `capnweb` client.
+`capnwebcpp` provides WebSocket and HTTP-batch transports plus a MessagePort adapter, implements remap and a client-call path for server→client calls, and includes serialization hardening and robust lifecycle handling. A minimal C++ HTTP batch client is available; the library interoperates with the original TypeScript/JavaScript `capnweb` client.
 
 | Feature | Status | Notes |
 | --- | --- | --- |
 | WebSocket endpoint | ✅ | uWebSockets-based server endpoint |
-| HTTP-batch endpoint | ✅ | Server-side batch processing via POST |
+| HTTP-batch endpoint | ✅ | Server-side batch processing via POST; supports export-capture remap (promise placeholders; push/pull frames) |
 | RpcTarget dispatch | ✅ | Method registry with JSON args/return |
 | push/pull/resolve/reject | ✅ | Basic semantics wired end-to-end |
 | Pipelining (property paths) | ✅ | Pipeline eval + property path resolution |
@@ -23,7 +23,7 @@ Server-focused implementation of the Cap'n Web RPC protocol with bidirectional c
 | Import/export tables + refcounts (neg ID policy) | ✅ | Re-export reuse; remoteRefcount tracked; negative IDs |
 | Release semantics | ✅ | Auto-release on resolve/reject; export release decrements and erases at zero (aggregated supported) |
 | Transport abstraction | ✅ | Interface + uWS/HTTP batch + MessagePort adapters |
-| Client stubs/promises in C++ | ❌ | Server-only library |
+| Client stubs/promises in C++ | ⚠️ | Minimal HTTP batch client; basic stubs; no WS; limited promise handling |
 | Advanced serialization (capnweb extended types) | ✅ | Supported via sentinel wrappers ($bigint/$date/$bytes/$undefined/$error) |
 | Error redaction hooks | ✅ | onSendError hook finalized; applied to reject/abort with shape sanitization |
 | Abort/onBroken callbacks | ✅ | Send abort frames, close transport, cleanup tables, propagate onBroken callbacks |
@@ -42,12 +42,11 @@ Status icons: ✅ implemented, ⚠️ partial, ❌ not yet implemented
 
 Ongoing Work
 - Public API polish: diagnostics (stats/logging)
-- Multi-target re-export identity (stable IDs per target instance)
 - Workers/Node convenience helpers and transport adapters
 - Cross-interop and fuzz tests against capnweb
 - Performance: microtask scheduling and pipeline caching
 - Documentation: batch-mode limitations and server→client examples
-- Optional: minimal C++ client stubs/promises
+- Expand C++ client: WebSocket transport, stub lifecycle/release, promise awaiting
 
 ## Dependencies
 
